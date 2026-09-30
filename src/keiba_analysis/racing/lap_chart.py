@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from keiba_analysis.racing.lap_estimate import EstimatedLaps, run_key, split_floats
 from keiba_analysis.racing.lap_phases import PHASE_LABELS, phase_paces
-from keiba_analysis.past_runs import (  # TODO(migration): past_runs.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.racing.past_runs import (
     DASH,
     SURFACE_SHORT,
     cushion_label,

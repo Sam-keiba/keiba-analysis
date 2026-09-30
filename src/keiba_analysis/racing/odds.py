@@ -17,7 +17,7 @@ import hashlib
 import json
 import re
 
-from keiba_analysis.style import BET_TYPE_COLORS, waku_color  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import BET_TYPE_COLORS, waku_color
 from keiba_data.scrapers import jra_odds
 
 DASH = "—"

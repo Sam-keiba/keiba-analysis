@@ -12,7 +12,7 @@ Streamlit同梱のVega-Liteの版に合わせる。理由は lap_chart.py の先
 from __future__ import annotations
 
 from keiba_data.sire_data import SireYear
-from keiba_analysis.style import SURFACE_BADGE  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import SURFACE_BADGE
 
 CHART_HEIGHT = 280
 AEI_COLOR = "#1f7a50"        # 折れ線（緑。RATE_HEAT_COLORSと同じ系統）

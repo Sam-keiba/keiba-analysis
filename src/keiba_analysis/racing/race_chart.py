@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from keiba_analysis.racing.race_forecast import AverageLaps
-from keiba_analysis.style import SURFACE_BADGE  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import SURFACE_BADGE
 
 AVERAGE_KIND = "同条件の平均"
 PROJECTED_KIND = "本日の想定"

@@ -1,6 +1,6 @@
 """持ちタイム（コース図の下のタブと表）。"""
 
-from keiba_analysis.style import RUNNING_STYLE_COLORS  # TODO(migration): style.py not yet in keiba-analysis
+from keiba_analysis.shared.style import RUNNING_STYLE_COLORS
 
 from keiba_analysis.racing.best_times import (
     horses_without_record,

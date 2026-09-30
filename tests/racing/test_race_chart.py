@@ -8,7 +8,7 @@ from keiba_analysis.racing.race_chart import (
     build_rows,
 )
 from keiba_analysis.racing.race_forecast import average_laps, project_laps
-from keiba_analysis.style import SURFACE_BADGE  # TODO(migration): style.py not yet in keiba-analysis
+from keiba_analysis.shared.style import SURFACE_BADGE
 from tests.racing.test_race_forecast import RACES
 
 AVERAGE = average_laps(RACES)

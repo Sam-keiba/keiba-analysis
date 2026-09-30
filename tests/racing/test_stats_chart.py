@@ -21,7 +21,7 @@ from keiba_analysis.racing.stats_chart import (
     cell_rows,
     total_rows,
 )
-from keiba_analysis.style import (  # TODO(migration): style.py not yet in keiba-analysis
+from keiba_analysis.shared.style import (
     PACE_COLORS,
     RATE_HEAT_COLORS,
     RUNNING_STYLE_COLORS,

@@ -12,10 +12,10 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
-from keiba_analysis.past_runs import class_short, cushion_label, jra_race_link  # TODO(migration): past_runs.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.racing.past_runs import class_short, cushion_label, jra_race_link
 from keiba_analysis.racing.race_forecast import format_race_time
 from keiba_analysis.racing.running_style import classify_run
-from keiba_analysis.style import RUNNING_STYLE_COLORS  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import RUNNING_STYLE_COLORS
 
 DASH = "—"
 WEEKDAYS = ("月", "火", "水", "木", "金", "土", "日")

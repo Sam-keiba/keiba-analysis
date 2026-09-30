@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from html import escape
 
-from keiba_analysis.past_runs import SURFACE_SHORT, pace_mark  # TODO(migration): past_runs.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.racing.past_runs import SURFACE_SHORT, pace_mark
 from keiba_analysis.racing.race_forecast import format_race_time
 from keiba_analysis.racing.running_style import classify_run
-from keiba_analysis.style import FINISH_COLORS, RUNNING_STYLE_COLORS, waku_color  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import FINISH_COLORS, RUNNING_STYLE_COLORS, waku_color
 
 DASH = "—"
 NEIGHBOUR_DISTANCE_M = 200  # 前後にいくつ離れた距離まで見るか

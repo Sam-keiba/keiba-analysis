@@ -175,7 +175,7 @@ def test_the_freshly_fetched_bet_type_is_handed_over_so_its_tab_opens():
 
 def test_every_bet_type_has_its_own_colour():
     """買い目に何券種か積んだとき、帯とバッジの色で見分けられるようにする。"""
-    from keiba_analysis.style import BET_TYPE_COLORS  # TODO(migration): style.py not yet in keiba-analysis
+    from keiba_analysis.shared.style import BET_TYPE_COLORS
 
     colors = {b["key"]: b["color"] for b in odds.build_payload(ENTRIES, ODDS, UPDATES)["betTypes"]}
     assert set(colors) == {b.key for b in jra_odds.BET_TYPES}

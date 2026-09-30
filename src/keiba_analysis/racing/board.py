@@ -14,7 +14,7 @@ import hashlib
 
 from keiba_analysis.racing import tier as tier_module
 from keiba_analysis.racing.running_style import SAMPLE_LIMIT, classify_run, normalized_position
-from keiba_analysis.style import waku_color  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import waku_color
 
 # レーン（上から順に並べる）。段の呼び名も意味も tier.py を唯一の出どころにする
 # （同じ文言を2か所に置いていて、片方だけ直す事故が起きやすかった）。

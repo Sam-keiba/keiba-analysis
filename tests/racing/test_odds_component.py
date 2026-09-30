@@ -478,7 +478,7 @@ def test_each_bet_type_is_marked_with_its_own_colour(script: str, source: str):
 
 def test_the_bet_colours_are_not_written_into_the_component(script: str):
     """色の出どころはstyle.py1か所にする（枠色と同じ方針）。"""
-    from keiba_analysis.style import BET_TYPE_COLORS  # TODO(migration): style.py not yet in keiba-analysis
+    from keiba_analysis.shared.style import BET_TYPE_COLORS
 
     for color in BET_TYPE_COLORS.values():
         assert color not in script, color

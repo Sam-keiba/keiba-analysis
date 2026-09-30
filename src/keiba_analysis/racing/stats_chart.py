@@ -22,7 +22,7 @@ from keiba_analysis.racing.horse_stats import (
     Grid,
     style_shares,
 )
-from keiba_analysis.style import (  # TODO(migration): style.py not yet in keiba-analysis; currently slated for keiba-app. Needs resolution.
+from keiba_analysis.shared.style import (
     PACE_COLORS,
     RATE_HEAT_COLORS,
     RUNNING_STYLE_COLORS,

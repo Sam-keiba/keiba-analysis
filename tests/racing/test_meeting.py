@@ -1,7 +1,7 @@
 """開催の勝ちタイム一覧（コース図の下）。"""
 
 from keiba_analysis.racing import meeting
-from keiba_analysis.style import RUNNING_STYLE_COLORS  # TODO(migration): style.py not yet in keiba-analysis
+from keiba_analysis.shared.style import RUNNING_STYLE_COLORS
 
 
 def row(race_date="2026-09-20", race_no=11, **kwargs):
