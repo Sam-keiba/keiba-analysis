@@ -22,4 +22,4 @@ build-backend = "uv_build"
 testpaths = ["tests"]
 
 [tool.uv.sources]
-keiba-data = { path = "/Users/soraya/Desktop/keiba-data", editable = true }
+keiba-data = { path = "../keiba-data", editable = true }

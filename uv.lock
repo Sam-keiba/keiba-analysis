@@ -481,7 +481,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "keiba-data", editable = "/Users/soraya/Desktop/keiba-data" },
+    { name = "keiba-data", editable = "../keiba-data" },
     { name = "streamlit", specifier = ">=1.40" },
 ]
 
@@ -491,7 +491,7 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 [[package]]
 name = "keiba-data"
 version = "0.1.0"
-source = { editable = "/Users/soraya/Desktop/keiba-data" }
+source = { editable = "../keiba-data" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "lxml" },
