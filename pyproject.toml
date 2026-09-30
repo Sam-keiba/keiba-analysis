@@ -1,0 +1,25 @@
+[project]
+name = "keiba-analysis"
+version = "0.1.0"
+description = "keiba-dataの上に乗る、レース分析(racing)と一口馬主分析(owner)の共通分析層"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "keiba-data",
+    "streamlit>=1.40",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+keiba-data = { path = "/Users/soraya/Desktop/keiba-data", editable = true }

@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<!--
+  オッズ（単勝〜3連単）と買い目。券種のタブ、フォーメーション形式の馬選択、
+  右カラムに「買い目」（組み合わせ・1点あたりの金額・点数・合計）。
+
+  並びはnetkeibaのオッズページの構造にそろえてあるが、色と字はこのアプリのもの
+  （枠番の色は JRA公式の枠色＝style.py の WAKU_COLORS から渡ってくる）。
+
+  大事な点1: **Streamlitへ値を返すのは2つの操作のときだけ**
+  （券種の取り込み＝更新マーク、買い目の保存）。チェック・タブの切り替え・
+  並べ替え・金額の入力中は返さないので、3,360点の3連単でもさくさく選べる。
+  以前の予想印が「押すたびに飛ぶ」で使いものにならなかったのと同じことを
+  繰り返さないため。値を送る口は `sendValue()` の1か所だけにしてある。
+
+  大事な点2: **購入・投票の機能は作らない。** 買い目は「何をどれだけ買うつもりか」の
+  控えで、JRA-IPATのような投票の導線は言葉も含めて一切置かない。
+-->
+<style>
+  :root {
+    --line: #e3e6e3;
+    --line-strong: #c9cfc9;
+    --ink: #1b1b1b;
+    --muted: #6b716b;
+    --accent: #1b7f4b;
+    --head: #f4f6f4;
+    --zebra: #fafbfa;
+    --pop1: #e2382f;
+    --pop2: #2168c3;
+    --pop3: #189a54;
+  }
+  * { box-sizing: border-box; }
+  /* チェックは指でも押しやすい大きさにする（既定の13pxは小さすぎた） */
+  input[type="checkbox"] { width: 17px; height: 17px; cursor: pointer; margin: 0; }
+  body {
+    margin: 0; color: var(--ink); background: #fff;
+    font-family: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'Yu Gothic', sans-serif;
+    font-size: 13px;
+    /* 横スクロールバーが出たり消えたりすると高さが変わり、Streamlitとの
+       「高さを送る→renderが返る」の往復が止まらなくなるので、はみ出させない */
+    overflow-x: hidden;
+  }
+
+  /* --- 左（オッズ）と右（買い目）の2カラム --- */
+  /* 幅が足りないときは買い目が下に回る（同じ理由で、横には絶対にはみ出させない） */
+  .wrap { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+  .main { flex: 1 1 560px; min-width: 0; }
+  .slip { flex: 1 1 360px; max-width: 380px; }
+
+  /* --- 券種のタブ（netkeibaと同じ位置・同じ並び） --- */
+  .tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 2px solid var(--line-strong); }
+  .tab {
+    appearance: none; border: 1px solid var(--line); border-bottom: none;
+    background: var(--head); color: var(--muted);
+    padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
+    border-radius: 7px 7px 0 0; margin-bottom: -2px;
+    font-family: inherit; transition: background .12s, color .12s;
+  }
+  .tab:hover { background: #fff; color: var(--ink); }
+  .tab[aria-selected="true"] {
+    background: #fff; color: var(--ink);
+    border-color: var(--line-strong); border-bottom: 2px solid #fff;
+  }
+  .tab.empty { color: #b3b8b3; }
+  .tab .n { font-weight: 400; font-size: 11px; margin-left: 5px; color: #9aa09a; }
+
+  /* --- 中身（タブを切り替えるたびにふわっと入れ替わる） --- */
+  .panel { padding: 12px 2px 4px; }
+  .panel.fade { animation: panel-in .18s ease-out; }
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  .head-line {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .note { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 6px 0 0; }
+  .empty-box {
+    border: 1px dashed var(--line-strong); border-radius: 8px; padding: 18px;
+    color: var(--muted); text-align: center;
+  }
+
+  /* --- 更新マーク（券種ごとの取り込み。ボタンの羅列の代わり） --- */
+  .refresh {
+    appearance: none; display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--muted);
+    border-radius: 999px; padding: 2px 10px 2px 8px; font-size: 11px;
+    cursor: pointer; font-family: inherit;
+  }
+  .refresh:hover { color: var(--accent); border-color: var(--accent); }
+  .refresh .mark { font-size: 13px; line-height: 1; }
+  .refresh[disabled] { opacity: .5; cursor: default; }
+  /* 閲覧モード（クラウド）では押せる更新マークの代わりに、時刻だけを出す */
+  .chip-text { font-size: 11px; color: var(--muted); }
+
+  /* --- 共通の表 --- */
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid var(--line); padding: 4px 7px; }
+  thead th { background: var(--head); font-size: 12px; color: #444; white-space: nowrap; }
+  .num {
+    display: inline-block; min-width: 24px; padding: 2px 0; text-align: center;
+    border: 1px solid #c9cfc9; border-radius: 3px; font-weight: 700; font-size: 13px;
+  }
+  .odds { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .odds.miss { color: #b3b8b3; }
+  .pop { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .pop[data-rank="1"] { color: var(--pop1); font-weight: 700; }
+  .pop[data-rank="2"] { color: var(--pop2); font-weight: 700; }
+  .pop[data-rank="3"] { color: var(--pop3); font-weight: 700; }
+
+  /* --- 単勝・複勝の一覧（1つの表に両方の列を並べる） --- */
+  table.single { width: 100%; max-width: 760px; }
+  table.single tbody tr { cursor: pointer; }          /* 行のどこを押してもチェックが入る */
+  table.single tbody tr:hover { background: #f2f7f4; }
+  table.single td { padding: 6px 8px; }
+  table.single td.name { text-align: left; }
+  table.single tbody tr:nth-child(even) { background: var(--zebra); }
+  table.single td.tick { text-align: center; width: 34px; }
+  .acts-line { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
+
+  /* --- 買い方（通常／フォーメーション・ながし・ボックス） --- */
+  .modes { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+  .modes .mini { font-size: 13px; padding: 6px 14px; }
+  .modes .mini[aria-pressed="true"] {
+    background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700;
+  }
+  /* ながしの上の段（軸の頭数・軸の着順・マルチ） */
+  .opts {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0 0 10px;
+  }
+  .opts .opt { display: inline-flex; align-items: center; gap: 5px; }
+  .opts .lb { color: var(--muted); font-size: 12px; }
+  .opts .mini[aria-pressed="true"] {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .opts .multi {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 700;
+  }
+
+  /* --- 馬選択（フォーメーション） --- */
+  .form-wrap { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .slots { display: flex; gap: 12px; flex-wrap: wrap; }
+  /* 列は最大3つ（3連単）。余っている右の幅まで均等に広げる */
+  /* 広がりすぎると馬名とオッズが離れて読みにくいので、1列420pxで頭打ちにする */
+  .slot { flex: 1 1 0; min-width: 210px; max-width: 420px;
+          border: 1px solid var(--line); border-radius: 7px; }
+  .slot h4 {
+    margin: 0; padding: 7px 10px; background: var(--head); font-size: 13px;
+    border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  }
+  .slot h4 .acts { display: flex; gap: 4px; }
+  .mini {
+    appearance: none; border: 1px solid var(--line-strong); background: #fff;
+    border-radius: 5px; font-size: 12px; padding: 3px 10px; cursor: pointer;
+    color: var(--muted); font-family: inherit;
+  }
+  .mini:hover { color: var(--ink); border-color: var(--muted); }
+  .mini[disabled] { opacity: .45; cursor: default; }
+  .mini.go { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .mini.go:hover { background: var(--accent); color: #fff; }
+  .mini.go[disabled]:hover { background: #fff; color: var(--accent); }
+  /* 18頭立てでもスクロールせずに全頭見えるだけの高さ（1行30px×18頭＋余白） */
+  .slot ul { list-style: none; margin: 0; padding: 4px 0; max-height: 640px; overflow-y: auto; }
+  .slot li { padding: 0; }
+  .slot label {
+    display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer;
+    font-size: 13px; line-height: 1.7;
+  }
+  .slot label:hover { background: #f2f7f4; }
+  /* 幅があるときは馬名を省略しない（狭いときだけ … で切る） */
+  .slot label .nm {
+    flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .slot label .o { margin-left: auto; padding-left: 8px; color: var(--muted); font-size: 12px; }
+
+  /* --- 点数と並べ替え --- */
+  .result-head {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 6px;
+  }
+  .count { font-weight: 700; }
+  .count b { color: var(--accent); font-size: 16px; }
+  /* 並べ替えは点数のとなり、「買い目へ追加」は右端に離して置く（押し間違えにくい） */
+  .sorts { display: flex; gap: 6px; }
+  .result-head .mini { font-size: 13px; padding: 6px 16px; }
+  .result-head .mini.go { margin-left: auto; }
+  .sorts .mini[aria-pressed="true"] {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  /* 1点ずつ選ぶ行（表のすぐ上） */
+  .pick-line {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 6px;
+  }
+  .pick-count { color: var(--muted); font-size: 12px; }
+  table.combos { width: 100%; max-width: 500px; }
+  table.combos tbody tr { cursor: pointer; }      /* 行のどこを押しても選べる */
+  table.combos tbody tr:nth-child(even) { background: var(--zebra); }
+  table.combos tbody tr:hover { background: #f2f7f4; }
+  table.combos td.combo { white-space: nowrap; }
+  table.combos .tick { width: 42px; text-align: center; }
+  /* 組み合わせの一覧。横に広がると馬番とオッズが離れて読みにくいので幅を抑える */
+  .scroll {
+    max-height: 420px; max-width: 540px; overflow-y: auto;
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .scroll table.combos { border: none; max-width: none; }
+  .scroll thead th { position: sticky; top: 0; z-index: 1; }
+
+  /* --- 軸ごとのオッズ表（netkeibaと同じ縦並び） --- */
+  h3.section {
+    font-size: 13px; margin: 18px 0 6px; padding-left: 7px;
+    border-left: 3px solid var(--accent);
+  }
+  /* 軸ごとに行数が違うので、高さを引き伸ばさずに上ぞろえにする */
+  .axes { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  table.axis { min-width: 132px; }
+  table.axis caption {
+    caption-side: top; background: var(--head); border: 1px solid var(--line);
+    border-bottom: none; font-size: 12px; font-weight: 700; padding: 3px 6px;
+    border-radius: 5px 5px 0 0;
+  }
+  table.axis td.p { text-align: center; width: 34px; }
+
+  /* --- 買い目（右カラム） --- */
+  .slip-box { border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .slip-box > h3 {
+    margin: 0; padding: 9px 12px; background: var(--head); font-size: 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .slip-box > h3 .saved { font-size: 11px; font-weight: 400; color: var(--muted); }
+  .slip-list { max-height: 640px; overflow-y: auto; }
+  .slip-empty { padding: 16px 12px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  /* まとまりごとに券種の色。左の帯とバッジで、どの券種かをひと目で見分ける
+     （色は payload の betTypes[].color ＝ style.py の BET_TYPE_COLORS から来る） */
+  .g { border-bottom: 1px solid var(--line); border-left: 4px solid var(--line-strong);
+       padding: 9px 12px; }
+  .g-head { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .g-head .bet {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    color: #fff; font-weight: 700; font-size: 12px; white-space: nowrap;
+  }
+  .g-head .kind { color: var(--muted); font-size: 12px; }
+  .g-head .pts { margin-left: auto; color: var(--accent); font-weight: 700; }
+  .g-head .x {
+    appearance: none; border: none; background: none; color: #b3b8b3;
+    cursor: pointer; font-size: 13px; padding: 0 2px; font-family: inherit;
+  }
+  .g-head .x:hover { color: var(--pop1); }
+  .g-combos { margin: 6px 0 0; max-height: 150px; overflow-y: auto; }
+  .g-combos .c {
+    display: flex; align-items: center; gap: 5px; font-size: 13px; padding: 2px 0;
+  }
+  .g-combos .c .o { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .g-money {
+    display: flex; align-items: center; gap: 6px; margin-top: 7px;
+    font-size: 13px; color: var(--muted);
+  }
+  .g-money input {
+    width: 88px; font-family: inherit; font-size: 13px; text-align: right;
+    border: 1px solid var(--line-strong); border-radius: 4px; padding: 3px 6px;
+  }
+  .g-money .sub { margin-left: auto; color: var(--ink); font-weight: 700; }
+  /* 当たったらいくら戻るか（いまのオッズからの目安） */
+  .g-payout { margin-top: 4px; text-align: right; font-size: 12px; color: var(--accent); }
+  .g-head .split {
+    appearance: none; border: 1px solid var(--line-strong); background: #fff;
+    border-radius: 4px; font-size: 11px; padding: 1px 6px; cursor: pointer;
+    color: var(--muted); font-family: inherit;
+  }
+  .g-head .split:hover { color: var(--accent); border-color: var(--accent); }
+  .slip-foot { padding: 10px 12px; background: var(--zebra); border-top: 1px solid var(--line); }
+  .slip-foot .refresh-all {
+    display: block; width: 100%; margin-bottom: 9px; padding: 7px 10px;
+    font-size: 12px; font-weight: 700; color: var(--accent); border-color: var(--accent);
+  }
+  .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); color: #fff; }
+  .slip-foot .bulk { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
+  .slip-total { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+  .slip-total .yen { margin-left: auto; font-size: 20px; font-weight: 700; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="main">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="panel" id="panel"></div>
+  </div>
+  <aside class="slip" id="slip"></aside>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const DASH = "—";
+  // 着順を見る券種の列の見出し／見ない券種の列の見出し
+  const ORDERED_HEADS = ["1着", "2着", "3着"];
+  const UNORDERED_HEADS = ["1頭目", "2頭目", "3頭目"];
+  // 枠連だけは馬ではなく枠を選ぶ
+  const FRAME_HEADS = ["1枠目", "2枠目"];
+  // 3連複・3連単は全通りの表が大きすぎるので、オッズの低い順に切って出す
+  const TOP_N = 50;
+  const DEFAULT_AMOUNT = 100;     // 1点あたりの既定の金額
+  // 買い方（既定は今までどおりフォーメーション）
+  const MODES = [
+    ["formation", "通常／フォーメーション"],
+    ["nagashi", "ながし"],
+    ["box", "ボックス"],
+  ];
+  const MODE_LABELS = { formation: "フォーメーション", nagashi: "ながし", box: "ボックス" };
+
+  let payload = { betTypes: [], tabs: [], horses: [], frames: [], slip: [], readOnly: false };
+  let active = null;                 // 表示中のタブ（券種）
+  let appliedFocus = null;           // Python側から「ここを開いて」と言われた券種
+  let appliedVersion = null;         // いま描いてある中身の符号（同じなら描き直さない）
+  let appliedDraw = null;            // そのうち**買い目を除いた**ぶんの符号
+  let lastHeight = null;             // 最後にStreamlitへ伝えた高さ
+  let waitingFetch = false;          // 更新マークを押して取り込みを待っている
+  let slip = [];                     // 買い目（まとまりの配列）
+  let nextGroup = 1;                 // まとまりの番号（画面の中だけの通し番号）
+  let savedAt = null;                // 最後にこちらから保存を送った時刻（ms）
+  let appliedSlip = null;            // 取り込み済みのサーバ側の保存時刻
+  const picks = {};                  // 券種 -> [{番号: true}, …]（列ごとに選んだ番号）
+  const singlePicks = {};            // 単勝・複勝の表で選んだ馬番
+  let mode = "formation";            // 買い方（画面を開いているあいだ覚える）
+  const nagashi = {};                // 券種 -> {axes, partners, unit, positions, multi}
+  const boxPicks = {};               // 券種 -> {番号: true}（ボックスで選んだ馬）
+  const dropped = {};                // 券種 -> {組み合わせ: true}（選択から外したもの）
+  const lastCombos = {};             // 券種 -> 直前の組み合わせ（変わったら選択を戻す）
+  const sorts = {};                  // 券種 -> "odds" | "combo"
+  const checked = {};                // 買い目のまとまり -> チェックしたか
+
+  /**
+   * Streamlitへ値を返す**唯一の口**。
+   * 呼ぶのは「更新マークを押した」「買い目が変わった」の2つだけで、
+   * チェックや並べ替えでは呼ばない（呼ぶと画面が再実行されて選択がつらくなる）。
+   */
+  function sendValue(value) {
+    send("streamlit:setComponentValue", { value: value, dataType: "json" });
+  }
+  function requestFetch(tabKey) {
+    waitingFetch = true;
+    sendValue({ kind: "fetch", bet: tabKey, at: Date.now() });
+  }
+  /** 何券種かをまとめて取り込み直す（買い目に入っている券種の更新）。 */
+  function requestFetchMany(tabKeys) {
+    if (!tabKeys.length) return;
+    waitingFetch = true;
+    sendValue({ kind: "fetch", bets: tabKeys, at: Date.now() });
+  }
+  function saveSlip() {
+    savedAt = Date.now();
+    sendValue({ kind: "slip", groups: slip, at: savedAt });
+  }
+
+  function send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+  }
+
+  /**
+   * 高さが本当に変わったか。**同じ高さを送り直さない**ための判定。
+   *
+   * Streamlitは高さを受け取ると `render` をこちらへ送り返してくる。描き直すたびに
+   * 高さを送っていると「高さを送る→renderが返る→描き直す→高さを送る」の往復が
+   * 止まらず、押している最中の要素が差し替わってクリックが消える。
+   */
+  function heightChanged(next, last) {
+    return last == null || Math.abs(next - last) >= 2;
+  }
+  function setHeight() {
+    const height = document.documentElement.scrollHeight + 8;
+    if (!heightChanged(height, lastHeight)) return;
+    lastHeight = height;
+    send("streamlit:setFrameHeight", { height: height });
+  }
+
+  function bet(key) {
+    return payload.betTypes.filter(function (b) { return b.key === key; })[0] || null;
+  }
+  function tab(key) {
+    return (payload.tabs || []).filter(function (t) { return t.key === key; })[0] || null;
+  }
+  /** その券種が入っているタブのキー（取り込みの単位。複勝なら単勝のタブ）。 */
+  function tabKeyFor(betKey) {
+    const found = (payload.tabs || []).filter(function (t) {
+      return (t.bets || []).indexOf(betKey) >= 0;
+    })[0];
+    return found ? found.key : null;
+  }
+  /** 買い目に入っている券種の、取り込みの単位（タブの並び順・重複なし）。 */
+  function slipTabKeys() {
+    const wanted = {};
+    slip.forEach(function (group) {
+      const key = tabKeyFor(group.bet);
+      if (key) wanted[key] = true;
+    });
+    return (payload.tabs || []).map(function (t) { return t.key; })
+      .filter(function (key) { return wanted[key]; });
+  }
+
+  /**
+   * 選んだ番号の列から組み合わせを作る（点数の計算もこれ1つで決まる）。
+   *
+   * - `ordered` … 着順を見る券種（馬単・3連単）。並べ方が違えば別の組み合わせ
+   * - `allowSame` … 同じ番号が重なってもよいか（枠連のゾロ目だけ）
+   * 着順を見ない券種は小さい順にそろえてから重複を落とす（1-2 と 2-1 を1つにする）。
+   */
+  function combinations(slots, opts) {
+    const ordered = !!(opts && opts.ordered);
+    const allowSame = !!(opts && opts.allowSame);
+    let out = [[]];
+    for (let i = 0; i < slots.length; i++) {
+      const next = [];
+      const column = slots[i];
+      for (let a = 0; a < out.length; a++) {
+        for (let b = 0; b < column.length; b++) {
+          const number = column[b];
+          if (!allowSame && out[a].indexOf(number) >= 0) continue;
+          next.push(out[a].concat([number]));
+        }
+      }
+      out = next;
+    }
+    const seen = {};
+    const combos = [];
+    for (let i = 0; i < out.length; i++) {
+      const numbers = ordered ? out[i] : out[i].slice().sort(function (x, y) { return x - y; });
+      const key = numbers.join("-");
+      if (seen[key]) continue;
+      seen[key] = true;
+      combos.push(key);
+    }
+    return combos;
+  }
+
+  /**
+   * ながし。**軸**（選んだ順）と**相手**から組み合わせを作る。
+   *
+   * 中身は `combinations()` そのままで、列に入れるものを変えているだけ:
+   * 軸を置く位置には `[軸]` を、残りの位置には相手をぜんぶ入れる。
+   * - `positions` … 軸の着順（順序のある券種だけ。`[0]` なら1着が軸）
+   * - `multi` … 軸の着順を**すべて入れ替える**（順序のある券種だけ）
+   * 順序の無い券種は位置に意味が無いので、軸を先頭から詰める。
+   */
+  function nagashiCombos(axes, partners, legs, opts) {
+    opts = opts || {};
+    // 同じ馬を軸と相手の両方に選んだときは、軸として扱う（相手からは外す）
+    partners = partners.filter(function (n) { return axes.indexOf(n) < 0; });
+    if (!axes.length || !partners.length) return [];
+    if (axes.length + 1 > legs) return [];          // 軸だけで埋まってしまう
+    const build = function (positions) {
+      const slots = [];
+      for (let i = 0; i < legs; i++) slots.push(partners.slice());
+      positions.forEach(function (p, i) { slots[p] = [axes[i]]; });
+      return combinations(slots, opts);
+    };
+    if (!opts.ordered) {
+      return build(axes.map(function (_, i) { return i; }));
+    }
+    const places = opts.multi
+      ? orderedPlaces(legs, axes.length)
+      : [(opts.positions || []).slice(0, axes.length)];
+    const seen = {};
+    const out = [];
+    places.forEach(function (positions) {
+      if (positions.length !== axes.length) return;
+      build(positions).forEach(function (combo) {
+        if (seen[combo]) return;
+        seen[combo] = true;
+        out.push(combo);
+      });
+    });
+    return out;
+  }
+
+  /** `legs` 個の位置から `n` 個を選ぶ並べ方をぜんぶ（マルチの置き場所）。 */
+  function orderedPlaces(legs, n) {
+    let out = [[]];
+    for (let i = 0; i < n; i++) {
+      const next = [];
+      out.forEach(function (used) {
+        for (let p = 0; p < legs; p++) {
+          if (used.indexOf(p) >= 0) continue;
+          next.push(used.concat([p]));
+        }
+      });
+      out = next;
+    }
+    return out;
+  }
+
+  /** 買い目の中身の符号（券種・組み合わせ・金額）。同じなら出ているものと同じ。 */
+  function slipSignature(groups) {
+    return (groups || []).map(function (group) {
+      return group.bet + ":" + (group.combos || []).join("/") + ":" + group.amount;
+    }).join("|");
+  }
+
+  /** ボックス。選んだ馬だけで全通り（どの列も同じ顔ぶれ）。 */
+  function boxCombos(numbers, legs, opts) {
+    if (!numbers.length) return [];
+    const slots = [];
+    for (let i = 0; i < legs; i++) slots.push(numbers.slice());
+    return combinations(slots, opts || {});
+  }
+
+  /**
+   * 買い目の合計。金額は**1点あたり**なので、まとまりの小計は 金額 × 点数。
+   * 金額が空や負の数のまとまりは0円として数える（点数には入る）。
+   */
+  function slipTotals(groups) {
+    let points = 0, yen = 0;
+    (groups || []).forEach(function (group) {
+      const n = (group.combos || []).length;
+      const amount = Math.max(0, Math.floor(Number(group.amount) || 0));
+      points += n;
+      yen += amount * n;
+    });
+    return { points: points, yen: yen };
+  }
+
+  /**
+   * 買い目を**券種の並び**にそろえる（単勝 → 複勝 → … → 3連単）。
+   * 同じ券種の中は足した順のまま（並べ替えは安定なのでそれで足りる）。
+   * `order` は券種 -> 並び順の番号。知らない券種はいちばん後ろへ回す。
+   */
+  function sortSlip(groups, order) {
+    return (groups || []).slice().sort(function (a, c) {
+      const x = order[a.bet], y = order[c.bet];
+      return (x == null ? 99 : x) - (y == null ? 99 : y);
+    });
+  }
+
+  /**
+   * 1点あたりの払戻。**オッズ × 金額**で、10円未満は切り捨て（JRAの払戻と同じ数え方）。
+   * オッズが分からない（未取得・票数なし）ときは 0。
+   */
+  function payoutYen(odds, amount) {
+    if (odds == null || !amount) return 0;
+    return Math.floor(odds * amount / 10) * 10;
+  }
+
+  /**
+   * まとまりの払戻の目安 `{min, max}`。**当たるのは1点だけ**なので足さずに幅で出す。
+   * `rows` は `[[低いオッズ, 高いオッズ], …]`（複勝・ワイドは幅で来る）。
+   * オッズが分からない行は幅に入れない。1つも分からなければ null。
+   */
+  function payoutRange(rows, amount) {
+    let min = null, max = null;
+    (rows || []).forEach(function (row) {
+      const low = row && row[0];
+      if (low == null) return;
+      const high = row[1] == null ? low : row[1];
+      const lowYen = payoutYen(low, amount);
+      const highYen = payoutYen(high, amount);
+      if (min == null || lowYen < min) min = lowYen;
+      if (max == null || highYen > max) max = highYen;
+    });
+    return min == null ? null : { min: min, max: max };
+  }
+
+  /** `12300` → `12,300`（jscでも同じ結果になるよう、自前で区切る）。 */
+  function yenText(value) {
+    const digits = String(Math.max(0, Math.floor(Number(value) || 0)));
+    let out = "";
+    for (let i = 0; i < digits.length; i++) {
+      if (i && (digits.length - i) % 3 === 0) out += ",";
+      out += digits[i];
+    }
+    return out + "円";
+  }
+
+  function slotsOf(key, legs) {
+    if (!picks[key]) {
+      picks[key] = [];
+      for (let i = 0; i < legs; i++) picks[key].push({});
+    }
+    return picks[key];
+  }
+  /**
+   * 選びかけの馬をぜんぶ白紙に戻す（券種を移ったとき）。
+   * **買い目には手を触れない**。積んだものは券種をまたいで残す。
+   */
+  function clearPicks() {
+    Object.keys(picks).forEach(function (key) { delete picks[key]; });
+    Object.keys(singlePicks).forEach(function (n) { delete singlePicks[n]; });
+    Object.keys(nagashi).forEach(function (key) { delete nagashi[key]; });
+    Object.keys(boxPicks).forEach(function (key) { delete boxPicks[key]; });
+    Object.keys(dropped).forEach(function (key) { delete dropped[key]; });
+    Object.keys(lastCombos).forEach(function (key) { delete lastCombos[key]; });
+  }
+
+  /**
+   * 組み合わせのうち**選んでいるもの**（買い目に入るのはこれだけ）。
+   * 外したものだけを覚えているので、出たばかりの組み合わせは全部選ばれている。
+   */
+  function pickedCombos(key, combos) {
+    const off = dropped[key] || {};
+    return combos.filter(function (combo) { return !off[combo]; });
+  }
+
+  /** ながしの選択（券種ごと）。軸は**選んだ順**に持つ（軸1＝先に選んだ馬）。 */
+  function nagashiOf(key) {
+    if (!nagashi[key]) {
+      nagashi[key] = { axes: [], partners: {}, unit: 1, positions: [0], multi: false };
+    }
+    return nagashi[key];
+  }
+  function boxOf(key) {
+    if (!boxPicks[key]) boxPicks[key] = {};
+    return boxPicks[key];
+  }
+  function chosenIn(set) {
+    return Object.keys(set).filter(function (n) { return set[n]; })
+      .map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  function chosen(key, legs) {
+    return slotsOf(key, legs).map(function (set) {
+      return Object.keys(set).filter(function (n) { return set[n]; })
+        .map(Number).sort(function (a, b) { return a - b; });
+    });
+  }
+
+  function oddsText(b, combo) {
+    if (!b) return DASH;
+    const value = b.odds[combo];
+    if (!value || value[0] == null) return DASH;
+    if (b.ranged && value[1] != null) return value[0].toFixed(1) + " - " + value[1].toFixed(1);
+    return value[0].toFixed(1);
+  }
+  function oddsLow(b, combo) {
+    if (!b) return null;
+    const value = b.odds[combo];
+    return value && value[0] != null ? value[0] : null;
+  }
+
+  function el(tag, attrs, children) {
+    const node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (name) {
+      if (name === "text") node.textContent = attrs[name];
+      else if (attrs[name] != null) node.setAttribute(name, attrs[name]);
+    });
+    (children || []).forEach(function (child) { node.appendChild(child); });
+    return node;
+  }
+  function numberChip(item) {
+    return el("span", {
+      class: "num", text: String(item.number),
+      style: "background:" + item.bg + ";color:" + item.fg,
+    });
+  }
+  function itemsOf(b) {
+    return b && b.byFrame ? payload.frames : payload.horses;
+  }
+  /** 券種 -> 並び順。出どころはPython側の BET_TYPES（payload の並びそのまま）。 */
+  function betOrder() {
+    const order = {};
+    (payload.betTypes || []).forEach(function (b, i) { order[b.key] = i; });
+    return order;
+  }
+
+  // --- 買い目 -------------------------------------------------------------------
+
+  /** 買い目に1つ足す（券種＋組み合わせのまとまり）。空なら何もしない。 */
+  function addToSlip(betKey, combos, kind) {
+    if (!combos || !combos.length) return;
+    slip.push({
+      group: nextGroup++, bet: betKey, kind: kind || "通常",
+      combos: combos.slice(), amount: DEFAULT_AMOUNT,
+    });
+    slip = sortSlip(slip, betOrder());   // 画面と保存の両方を券種順にそろえる
+    drawSlip();
+    saveSlip();
+  }
+
+  /**
+   * まとまりを**1点ずつに分ける**（金額はそのまま引き継ぐ）。
+   * 分ければ1点ごとに金額を変えられる。1点になるので買い方は「通常」にする。
+   */
+  function splitGroup(group) {
+    const at = slip.indexOf(group);
+    if (at < 0 || group.combos.length < 2) return;
+    const parts = group.combos.map(function (combo) {
+      return {
+        group: nextGroup++, bet: group.bet, kind: "通常",
+        combos: [combo], amount: group.amount,
+      };
+    });
+    slip.splice.apply(slip, [at, 1].concat(parts));
+    delete checked[group.group];
+    slip = sortSlip(slip, betOrder());     // 並べ替えは安定なので、もとの場所に並ぶ
+    drawSlip();
+    saveSlip();
+  }
+
+  function drawSlip() {
+    const box = document.getElementById("slip");
+    box.textContent = "";
+    const list = el("div", { class: "slip-list" });
+
+    slip.forEach(function (group) {
+      const b = bet(group.bet);
+      const kind = group.kind || (b && b.legs === 1 ? "通常" : "フォーメーション");
+      const tick = el("input", { type: "checkbox" });
+      tick.checked = !!checked[group.group];
+      tick.addEventListener("change", function () { checked[group.group] = tick.checked; });
+
+      const drop = el("button", { class: "x", type: "button", text: "✕", title: "この買い目を消す" });
+      drop.addEventListener("click", function () {
+        slip = slip.filter(function (other) { return other !== group; });
+        delete checked[group.group];
+        drawSlip();
+        saveSlip();
+      });
+
+      const color = (b && b.color) || "#6b716b";
+      const head = el("div", { class: "g-head" }, [
+        tick,
+        el("span", { class: "bet", text: b ? b.label : group.bet, style: "background:" + color }),
+        el("span", { class: "kind", text: kind }),
+        el("span", { class: "pts", text: group.combos.length + "点" }),
+      ]);
+      if (group.combos.length > 1) {     // 1点のまとまりは分けられない
+        const split = el("button", {
+          class: "split", type: "button", text: "ばらす",
+          title: "1点ずつに分けて、金額を別々に決める",
+        });
+        split.addEventListener("click", function () { splitGroup(group); });
+        head.appendChild(split);
+      }
+      head.appendChild(drop);
+
+      const combos = el("div", { class: "g-combos" });
+      const items = itemsOf(b);
+      const byNumber = {};
+      items.forEach(function (item) { byNumber[item.number] = item; });
+      group.combos.forEach(function (combo) {
+        const row = el("div", { class: "c" });
+        combo.split("-").forEach(function (text) {
+          const item = byNumber[Number(text)] || { number: Number(text), bg: "#eef0ee", fg: "#6b716b" };
+          row.appendChild(numberChip(item));
+        });
+        row.appendChild(el("span", { class: "o", text: oddsText(b, combo) }));
+        combos.appendChild(row);
+      });
+
+      const amount = el("input", {
+        type: "number", min: "0", step: "100", inputmode: "numeric",
+        value: String(group.amount),
+      });
+      const sub = el("span", { class: "sub" });
+      const payout = el("div", { class: "g-payout" });
+      function showSub() {
+        sub.textContent = yenText(group.amount * group.combos.length);
+        const range = payoutRange(
+          group.combos.map(function (combo) { return (b && b.odds[combo]) || [null, null]; }),
+          group.amount);
+        payout.textContent = "払戻の目安 " + (
+          range == null ? DASH
+            : range.min === range.max ? yenText(range.min)
+              : yenText(range.min).replace("円", "") + "〜" + yenText(range.max));
+      }
+      // `change`（入力を終えたとき）だけで保存する。1文字ごとには送らない
+      amount.addEventListener("change", function () {
+        group.amount = Math.max(0, Math.floor(Number(amount.value) || 0));
+        amount.value = String(group.amount);
+        showSub();
+        drawTotals();
+        saveSlip();
+      });
+      showSub();
+
+      const money = el("div", { class: "g-money" }, [
+        el("span", { text: "1点" }), amount, el("span", { text: "円" }), sub,
+      ]);
+      // 左の帯も券種の色。まとまりが並んだときに見分けやすくする
+      list.appendChild(el("div", {
+        class: "g", style: "border-left-color:" + color,
+      }, [head, combos, money, payout]));
+    });
+
+    if (!slip.length) {
+      list.appendChild(el("div", {
+        class: "slip-empty",
+        text: "左の表で馬を選んで「買い目へ追加」を押すと、ここに積まれます。金額は1点あたりです。",
+      }));
+    }
+
+    const bulk = el("div", { class: "bulk" });
+    [["すべて選択", true], ["すべて解除", false]].forEach(function (pair) {
+      const button = el("button", { class: "mini", type: "button", text: pair[0] });
+      button.addEventListener("click", function () {
+        slip.forEach(function (group) { checked[group.group] = pair[1]; });
+        drawSlip();
+      });
+      bulk.appendChild(button);
+    });
+    const drop = el("button", { class: "mini", type: "button", text: "選んだ買い目を削除" });
+    drop.addEventListener("click", function () {
+      const before = slip.length;
+      slip = slip.filter(function (group) { return !checked[group.group]; });
+      if (slip.length === before) return;
+      Object.keys(checked).forEach(function (key) { delete checked[key]; });
+      drawSlip();
+      saveSlip();
+    });
+    bulk.appendChild(drop);
+
+    const totals = el("div", { class: "slip-total", id: "slip-total" });
+    const foot = el("div", { class: "slip-foot" }, []);
+
+    // 買い目に入れた券種だけ、まとめて取り込み直す（1券種＝1リクエスト・3秒間隔）
+    const wanted = payload.readOnly ? [] : slipTabKeys();
+    if (wanted.length) {
+      const seconds = wanted.length * 3;
+      const refresh = el("button", {
+        class: "mini refresh-all", type: "button",
+        text: "買い目の券種を更新（" + wanted.length + "券種・約" + seconds + "秒）",
+        title: "買い目に入っている券種のオッズを、JRA公式から取り込み直す",
+      });
+      refresh.addEventListener("click", function () {
+        refresh.setAttribute("disabled", "disabled");
+        refresh.textContent = "取り込み中…";
+        requestFetchMany(wanted);
+      });
+      foot.appendChild(refresh);
+    }
+    foot.appendChild(bulk);
+    foot.appendChild(totals);
+
+    box.appendChild(el("div", { class: "slip-box" }, [
+      el("h3", {}, [
+        el("span", { text: "買い目" }),
+        el("span", { class: "saved", text: slip.length ? "自動で保存されます" : "" }),
+      ]),
+      list, foot,
+    ]));
+    drawTotals();
+    setHeight();
+  }
+
+  function drawTotals() {
+    const box = document.getElementById("slip-total");
+    if (!box) return;
+    const totals = slipTotals(slip);
+    box.textContent = "";
+    box.appendChild(el("span", { text: "合計" }));
+    box.appendChild(el("span", { text: totals.points + "点" }));
+    box.appendChild(el("span", { class: "yen", text: yenText(totals.yen) }));
+  }
+
+  // --- 券種のタブ ---------------------------------------------------------------
+
+  /**
+   * タブの右肩に出す点数と、取り込み済みかどうか。
+   * 単勝・複勝のように2券種が入るタブは**足さない**（どちらも頭数ぶんなので、
+   * 足すと16頭立てが32点に見えてしまう）。
+   */
+  function tabCount(t) {
+    let count = 0, available = false;
+    t.bets.forEach(function (key) {
+      const b = bet(key);
+      if (b && b.available) { available = true; count = Math.max(count, b.count); }
+    });
+    return { count: count, available: available };
+  }
+
+  function drawTabs() {
+    const tabs = document.getElementById("tabs");
+    tabs.textContent = "";
+    (payload.tabs || []).forEach(function (t) {
+      const state = tabCount(t);
+      const button = el("button", {
+        class: "tab" + (state.available ? "" : " empty"),
+        role: "tab", type: "button",
+        "aria-selected": t.key === active ? "true" : "false",
+      });
+      button.appendChild(document.createTextNode(t.label));
+      button.appendChild(el("span", { class: "n", text: state.available ? String(state.count) : DASH }));
+      button.addEventListener("click", function () {
+        if (active === t.key) return;
+        clearPicks();          // 券種を移ったら、選びかけの馬はいったん白紙に戻す
+        active = t.key;
+        drawTabs();
+        drawPanel(true);
+      });
+      tabs.appendChild(button);
+    });
+  }
+
+  /** 見出しの右の更新マーク（その券種だけ取り込み直す）。閲覧モードでは出さない。 */
+  function refreshChip(t) {
+    if (payload.readOnly) return el("span", { class: "chip-text", text: t.chip || "" });
+    const button = el("button", {
+      class: "refresh", type: "button",
+      title: t.label + "のオッズをJRA公式から取り込み直す",
+    }, [
+      el("span", { class: "mark", text: "↻" }),
+      el("span", { text: t.chip || "" }),
+    ]);
+    button.addEventListener("click", function () {
+      button.setAttribute("disabled", "disabled");
+      button.lastChild.textContent = "取り込み中…";
+      requestFetch(t.key);
+    });
+    return button;
+  }
+
+  // --- 単勝・複勝（1つの表に両方の列を並べる） -------------------------------------
+
+  function drawSingle(t) {
+    const bets = t.bets.map(bet).filter(function (b) { return !!b; });
+    const set = singlePicks;
+    const head = el("tr", {}, [el("th", { text: "" }), el("th", { text: "枠" }), el("th", { text: "馬番" }), el("th", { text: "馬名" })]);
+    bets.forEach(function (b) { head.appendChild(el("th", { text: b.label })); });
+    head.appendChild(el("th", { text: "人気" }));
+
+    const body = el("tbody", {});
+    payload.horses.forEach(function (horse) {
+      const combo = String(horse.number);
+      const box = el("input", { type: "checkbox" });
+      box.checked = !!set[horse.number];
+      box.addEventListener("change", function () { set[horse.number] = box.checked; });
+      const row = el("tr", { title: "行を押すと選べます" }, [
+        el("td", { class: "tick" }, [box]),
+        el("td", { class: "p", style: "text-align:center" }, [
+          el("span", {
+            class: "num", text: String(horse.waku == null ? "" : horse.waku),
+            style: "background:" + horse.bg + ";color:" + horse.fg,
+          }),
+        ]),
+        el("td", { style: "text-align:center" }, [numberChip(horse)]),
+        el("td", { class: "name", text: horse.name }),
+      ]);
+      bets.forEach(function (b) {
+        const low = oddsLow(b, combo);
+        row.appendChild(el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
+      });
+      row.appendChild(el("td", {
+        class: "pop", "data-rank": horse.pop || null,
+        text: horse.pop ? String(horse.pop) + "人気" : DASH,
+      }));
+      // 四角は小さいので、行のどこを押してもチェックが入るようにする
+      // （四角そのものを押したときは、ブラウザが既に反転させているので何もしない）
+      row.addEventListener("click", function (event) {
+        if (event.target === box) return;
+        box.checked = !box.checked;
+        set[horse.number] = box.checked;
+      });
+      body.appendChild(row);
+    });
+
+    const table = el("table", { class: "single" }, [el("thead", {}, [head]), body]);
+    const acts = el("div", { class: "acts-line" });
+    bets.forEach(function (b) {
+      const button = el("button", { class: "mini go", type: "button", text: "選んだ馬を" + b.label + "へ" });
+      button.addEventListener("click", function () {
+        const numbers = Object.keys(set).filter(function (n) { return set[n]; })
+          .map(Number).sort(function (a, c) { return a - c; });
+        addToSlip(b.key, numbers.map(String), "通常");
+      });
+      acts.appendChild(button);
+    });
+    const clear = el("button", { class: "mini", type: "button", text: "選択をクリア" });
+    clear.addEventListener("click", function () {
+      Object.keys(set).forEach(function (n) { delete set[n]; });
+      drawPanel(false);
+    });
+    acts.appendChild(clear);
+    return el("div", {}, [table, acts]);
+  }
+
+  // --- 馬選択（フォーメーション） ------------------------------------------------
+
+  /**
+   * 馬（枠連は枠）を1列ぶん並べる。**3つの買い方すべてがこれを使う**。
+   *
+   * - `isOn(number)` … いま選ばれているか
+   * - `toggle(number, on)` … 押されたときに中身を書き換える
+   * - `bulk` … `{all, clear}` を渡すと「全通り」「クリア」を出す
+   * 返す `sync()` は、**画面の四角を中身に合わせ直す**（軸の入れ替えなどで使う）。
+   */
+  function horseColumn(b, head, isOn, toggle, bulk) {
+    const items = itemsOf(b);
+    const list = el("ul", {});
+    const boxes = [];
+    items.forEach(function (item) {
+      const box = el("input", { type: "checkbox" });
+      box.checked = !!isOn(item.number);
+      boxes.push({ number: item.number, box: box });
+      box.addEventListener("change", function () { toggle(item.number, box.checked); });
+      const label = el("label", {}, [box, numberChip(item)]);
+      label.appendChild(el("span", { class: "nm", text: item.name }));
+      if (!b.byFrame && item.odds != null) {
+        label.appendChild(el("span", { class: "o", text: item.odds.toFixed(1) }));
+      }
+      list.appendChild(el("li", {}, [label]));
+    });
+    // 中身だけ変えて四角を触らないと、点数は変わるのに四角が押されたまま残る
+    function sync() {
+      boxes.forEach(function (pair) { pair.box.checked = !!isOn(pair.number); });
+    }
+    const acts = el("span", { class: "acts" });
+    if (bulk) {
+      const all = el("button", { class: "mini", type: "button", text: "全通り" });
+      all.addEventListener("click", function () { bulk.all(); sync(); });
+      const clear = el("button", { class: "mini", type: "button", text: "クリア" });
+      clear.addEventListener("click", function () { bulk.clear(); sync(); });
+      acts.appendChild(all);
+      acts.appendChild(clear);
+    }
+    const node = el("div", { class: "slot" }, [
+      el("h4", {}, [el("span", { text: head }), acts]),
+      list,
+    ]);
+    return { node: node, sync: sync };
+  }
+
+  /** フォーメーション: 列ごとに馬を選ぶ（今までの画面）。 */
+  function drawSlots(b, onChange) {
+    const heads = b.byFrame ? FRAME_HEADS : (b.ordered ? ORDERED_HEADS : UNORDERED_HEADS);
+    const sets = slotsOf(b.key, b.legs);
+    const items = itemsOf(b);
+    const wrap = el("div", { class: "slots" });
+    for (let i = 0; i < b.legs; i++) {
+      const set = sets[i];
+      const column = horseColumn(b, heads[i],
+        function (n) { return !!set[n]; },
+        function (n, on) { set[n] = on; onChange(); },
+        {
+          all: function () {
+            items.forEach(function (item) { set[item.number] = true; });
+            onChange();
+          },
+          clear: function () {
+            Object.keys(set).forEach(function (n) { delete set[n]; });
+            onChange();
+          },
+        });
+      wrap.appendChild(column.node);
+    }
+    return wrap;
+  }
+
+  /** ボックス: 選んだ馬だけで全通り（列は1つ）。 */
+  function drawBox(b, onChange) {
+    const set = boxOf(b.key);
+    const items = itemsOf(b);
+    const column = horseColumn(b, "ボックス",
+      function (n) { return !!set[n]; },
+      function (n, on) { set[n] = on; onChange(); },
+      {
+        all: function () {
+          items.forEach(function (item) { set[item.number] = true; });
+          onChange();
+        },
+        clear: function () {
+          Object.keys(set).forEach(function (n) { delete set[n]; });
+          onChange();
+        },
+      });
+    return el("div", { class: "slots" }, [column.node]);
+  }
+
+  /** ながし: 軸（1〜2頭）と相手。順序のある券種は軸の着順とマルチも選べる。 */
+  function drawNagashi(b, onChange) {
+    const state = nagashiOf(b.key);
+    const items = itemsOf(b);
+    const wrap = el("div", {});
+    wrap.appendChild(nagashiOptions(b, state));
+
+    const columns = el("div", { class: "slots" });
+    const axis = horseColumn(b, state.unit === 2 ? "軸（2頭）" : "軸",
+      function (n) { return state.axes.indexOf(n) >= 0; },
+      function (n, on) {
+        const at = state.axes.indexOf(n);
+        if (on && at < 0) state.axes.push(n);
+        if (!on && at >= 0) state.axes.splice(at, 1);
+        // 上限を超えたら、**古いほうから**外す（いま押した馬は必ず残す）
+        while (state.axes.length > state.unit) state.axes.shift();
+        axis.sync();
+        onChange();
+      });
+    const partners = horseColumn(b, "相手",
+      function (n) { return !!state.partners[n]; },
+      function (n, on) { state.partners[n] = on; onChange(); },
+      {
+        all: function () {
+          items.forEach(function (item) { state.partners[item.number] = true; });
+          onChange();
+        },
+        clear: function () {
+          Object.keys(state.partners).forEach(function (n) { delete state.partners[n]; });
+          onChange();
+        },
+      });
+    columns.appendChild(axis.node);
+    columns.appendChild(partners.node);
+    wrap.appendChild(columns);
+    return wrap;
+  }
+
+  /** ながしの上の段（軸の頭数・軸の着順・マルチ）。 */
+  function nagashiOptions(b, state) {
+    const row = el("div", { class: "opts" });
+    const pill = function (text, on, onPick) {
+      const button = el("button", {
+        class: "mini", type: "button", text: text,
+        "aria-pressed": on ? "true" : "false",
+      });
+      button.addEventListener("click", function () { onPick(); drawPanel(false); });
+      return button;
+    };
+
+    if (b.legs === 3) {   // 3頭の券種だけ軸2頭が選べる
+      const group = el("span", { class: "opt" }, [el("span", { class: "lb", text: "軸" })]);
+      [1, 2].forEach(function (unit) {
+        group.appendChild(pill(unit + "頭", state.unit === unit, function () {
+          state.unit = unit;
+          while (state.axes.length > unit) state.axes.shift();
+          state.positions = defaultPositions(unit);
+        }));
+      });
+      row.appendChild(group);
+    }
+
+    if (b.ordered) {      // 馬単・3連単は軸の着順を決める
+      const group = el("span", { class: "opt" }, [el("span", { class: "lb", text: "着順" })]);
+      placeChoices(b.legs, state.unit).forEach(function (choice) {
+        const same = choice.positions.join(",") === (state.positions || []).join(",");
+        group.appendChild(pill(choice.label, same, function () {
+          state.positions = choice.positions;
+        }));
+      });
+      row.appendChild(group);
+
+      const multi = el("input", { type: "checkbox" });
+      multi.checked = !!state.multi;
+      multi.addEventListener("change", function () {
+        state.multi = multi.checked;
+        drawPanel(false);
+      });
+      const label = el("label", { class: "multi", title: "軸の着順をすべて入れ替える" }, [multi]);
+      label.appendChild(el("span", { text: "マルチ" }));
+      row.appendChild(label);
+    }
+    return row;
+  }
+
+  function defaultPositions(unit) {
+    const out = [];
+    for (let i = 0; i < unit; i++) out.push(i);
+    return out;
+  }
+
+  /** 軸の着順の選び方（軸1頭なら 1着/2着/3着、軸2頭なら 1・2着/1・3着/2・3着）。 */
+  function placeChoices(legs, unit) {
+    const out = [];
+    if (unit === 1) {
+      for (let i = 0; i < legs; i++) out.push({ label: ORDERED_HEADS[i], positions: [i] });
+      return out;
+    }
+    for (let i = 0; i < legs; i++) {
+      for (let j = i + 1; j < legs; j++) {
+        out.push({ label: (i + 1) + "・" + (j + 1) + "着", positions: [i, j] });
+      }
+    }
+    return out;
+  }
+
+  function comboCells(b, combo) {
+    const items = itemsOf(b);
+    const byNumber = {};
+    items.forEach(function (item) { byNumber[item.number] = item; });
+    const cell = el("td", { class: "combo" });
+    combo.split("-").forEach(function (text, i) {
+      if (i) cell.appendChild(document.createTextNode(" "));
+      const item = byNumber[Number(text)] || { number: Number(text), bg: "#eef0ee", fg: "#6b716b" };
+      cell.appendChild(numberChip(item));
+    });
+    return cell;
+  }
+
+  /**
+   * 組み合わせの一覧。行ごとに**選択**の四角が付く（買い目に入るのは選んだぶんだけ）。
+   * 返す `sync()` は、画面の四角を中身に合わせ直す（全選択・全解除で使う）。
+   */
+  function drawCombos(b, combos, picked) {
+    if (!combos.length) {
+      return {
+        node: el("div", { class: "empty-box", text: "上の列から馬を選ぶと、組み合わせとオッズが出ます。" }),
+        sync: function () {},
+      };
+    }
+    const order = sorts[b.key] || "odds";
+    const sorted = combos.slice();
+    if (order === "odds") {
+      sorted.sort(function (x, y) {
+        const a = oddsLow(b, x), c = oddsLow(b, y);
+        if (a == null && c == null) return x.localeCompare(y);
+        if (a == null) return 1;                       // 票数なしは最後
+        if (c == null) return -1;
+        return a - c;
+      });
+    } else {
+      sorted.sort(function (x, y) {
+        const a = x.split("-").map(Number), c = y.split("-").map(Number);
+        for (let i = 0; i < a.length; i++) { if (a[i] !== c[i]) return a[i] - c[i]; }
+        return 0;
+      });
+    }
+    const body = el("tbody", {});
+    const boxes = [];
+    sorted.forEach(function (combo) {
+      const low = oddsLow(b, combo);
+      const box = el("input", { type: "checkbox" });
+      box.checked = picked.isOn(combo);
+      boxes.push({ combo: combo, box: box });
+      box.addEventListener("change", function () { picked.toggle(combo, box.checked); });
+      const row = el("tr", { title: "行を押すと選べます" }, [
+        el("td", { class: "tick" }, [box]),
+        comboCells(b, combo),
+        el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }),
+      ]);
+      // 四角は小さいので、行のどこを押しても入る／外れるようにする
+      row.addEventListener("click", function (event) {
+        if (event.target === box) return;
+        box.checked = !box.checked;
+        picked.toggle(combo, box.checked);
+      });
+      body.appendChild(row);
+    });
+    const table = el("table", { class: "combos" }, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { class: "tick", text: "選択" }),
+        el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }),
+      ])]),
+      body,
+    ]);
+    return {
+      node: el("div", { class: "scroll" }, [table]),
+      sync: function () {
+        boxes.forEach(function (pair) { pair.box.checked = picked.isOn(pair.combo); });
+      },
+    };
+  }
+
+  // --- 軸ごとのオッズ表（netkeibaと同じ縦並び） -----------------------------------
+
+  function drawAxes(b) {
+    const items = itemsOf(b);
+    const groups = {};
+    Object.keys(b.odds).forEach(function (combo) {
+      const parts = combo.split("-");
+      const axis = parts.slice(0, b.legs - 1).join("-");
+      (groups[axis] = groups[axis] || []).push(parts[parts.length - 1]);
+    });
+    const byNumber = {};
+    items.forEach(function (item) { byNumber[item.number] = item; });
+    const wrap = el("div", { class: "axes" });
+    Object.keys(groups).sort(function (x, y) {
+      const a = x.split("-").map(Number), c = y.split("-").map(Number);
+      for (let i = 0; i < a.length; i++) { if (a[i] !== c[i]) return a[i] - c[i]; }
+      return 0;
+    }).forEach(function (axis) {
+      const body = el("tbody", {});
+      groups[axis].map(Number).sort(function (a, c) { return a - c; }).forEach(function (number) {
+        const combo = axis + "-" + number;
+        const low = oddsLow(b, combo);
+        const item = byNumber[number] || { number: number, bg: "#eef0ee", fg: "#6b716b" };
+        body.appendChild(el("tr", {}, [
+          el("td", { class: "p" }, [numberChip(item)]),
+          el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }),
+        ]));
+      });
+      const caption = el("caption", { text: axis.split("-").join(" - ") });
+      wrap.appendChild(el("table", { class: "axis" }, [caption, body]));
+    });
+    return wrap;
+  }
+
+  function drawTop(b) {
+    const combos = Object.keys(b.odds).filter(function (combo) { return oddsLow(b, combo) != null; });
+    combos.sort(function (x, y) { return oddsLow(b, x) - oddsLow(b, y); });
+    const body = el("tbody", {});
+    combos.slice(0, TOP_N).forEach(function (combo, i) {
+      body.appendChild(el("tr", {}, [
+        el("td", { class: "pop", "data-rank": i + 1 <= 3 ? String(i + 1) : null, text: String(i + 1) }),
+        comboCells(b, combo),
+        el("td", { class: "odds", text: oddsText(b, combo) }),
+      ]));
+    });
+    const table = el("table", { class: "combos" }, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "人気" }), el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }),
+      ])]),
+      body,
+    ]);
+    return el("div", { class: "scroll" }, [table]);
+  }
+
+  // --- 1つのタブぶんの中身 -------------------------------------------------------
+
+  function drawPanel(animate) {
+    const panel = document.getElementById("panel");
+    panel.textContent = "";
+    panel.classList.remove("fade");
+    if (animate) {
+      void panel.offsetWidth;            // アニメーションをかけ直す
+      panel.classList.add("fade");
+    }
+    const t = tab(active);
+    if (!t) { setHeight(); return; }
+    const b = bet(t.bets[0]);
+    if (!b) { setHeight(); return; }
+
+    panel.appendChild(el("div", { class: "head-line" }, [
+      el("strong", { text: t.label + "オッズ" }),
+      refreshChip(t),
+    ]));
+
+    if (!tabCount(t).available) {
+      panel.appendChild(el("div", {
+        class: "empty-box",
+        text: payload.readOnly
+          ? t.label + "はまだ取り込んでいません（取り込みは手元のPCから行います）。"
+          : t.label + "はまだ取り込んでいません。見出しの右の更新マーク（↻）を押すと取り込めます（3秒に1回）。",
+      }));
+      setHeight();
+      return;
+    }
+
+    if (b.legs === 1) {
+      panel.appendChild(drawSingle(t));
+      panel.appendChild(el("p", {
+        class: "note",
+        text: "人気は単勝オッズの低い順です。複勝は3着までの払い戻しの幅で出ています。",
+      }));
+      setHeight();
+      return;
+    }
+
+    // 買い方（通常／フォーメーション・ながし・ボックス）
+    const modeBar = el("div", { class: "modes" });
+    MODES.forEach(function (pair) {
+      const button = el("button", {
+        class: "mini", type: "button", text: pair[1],
+        "aria-pressed": mode === pair[0] ? "true" : "false",
+      });
+      button.addEventListener("click", function () {
+        if (mode === pair[0]) return;
+        mode = pair[0];
+        drawPanel(false);
+      });
+      modeBar.appendChild(button);
+    });
+    panel.appendChild(modeBar);
+
+    // 馬選択
+    const form = el("div", { class: "form-wrap" });
+    const resultHead = el("div", { class: "result-head" });
+    const countBox = el("span", { class: "count" });
+    const combosBox = el("div", {});
+    const add = el("button", { class: "mini go", type: "button", text: "買い目へ追加" });
+    const pickLine = el("div", { class: "pick-line" });
+    const pickCount = el("span", { class: "pick-count" });
+    let current = [];        // いま出ている組み合わせ
+    let picked = [];         // そのうち選んでいるもの（買い目に入るのはこれだけ）
+    let table = { node: el("div", {}), sync: function () {} };
+    add.addEventListener("click", function () {
+      if (!picked.length) return;
+      addToSlip(b.key, picked, MODE_LABELS[mode]);
+      // 入れ終わったら選択を外す。**二度押しで同じ買い目が積まれる**のを防ぐ
+      // （馬の選択はそのままなので、続けて別の組み合わせを選べる）
+      current.forEach(function (combo) { dropped[b.key][combo] = true; });
+      table.sync();
+      countPicked();
+    });
+
+    /** 選んだ点数の出し直し（表は作り直さず、字と四角だけを合わせる）。 */
+    function countPicked() {
+      picked = pickedCombos(b.key, current);
+      pickCount.textContent = "選択 " + picked.length + "/" + current.length + "点";
+      add.textContent = "買い目へ追加" + (picked.length ? "（" + picked.length + "点）" : "");
+      if (picked.length) add.removeAttribute("disabled");
+      else add.setAttribute("disabled", "disabled");
+    }
+
+    function refresh() {
+      const opts = { ordered: b.ordered, allowSame: b.byFrame };
+      if (mode === "box") {
+        current = boxCombos(chosenIn(boxOf(b.key)), b.legs, opts);
+      } else if (mode === "nagashi") {
+        const state = nagashiOf(b.key);
+        current = nagashiCombos(
+          state.axes.slice(), chosenIn(state.partners), b.legs,
+          Object.assign({}, opts, {
+            positions: (state.positions || defaultPositions(state.unit)).slice(0, state.unit),
+            multi: state.multi,
+          }));
+      } else {
+        current = combinations(chosen(b.key, b.legs), opts);
+      }
+      // 組み合わせが変わったら、選択は**全部選ばれた状態**に戻す
+      const signature = current.join(",");
+      if (lastCombos[b.key] !== signature) {
+        lastCombos[b.key] = signature;
+        dropped[b.key] = {};
+      }
+      countBox.textContent = "";
+      countBox.appendChild(el("b", { text: String(current.length) }));
+      countBox.appendChild(document.createTextNode("点"));
+      combosBox.textContent = "";
+      table = drawCombos(b, current, {
+        isOn: function (combo) { return !(dropped[b.key] || {})[combo]; },
+        toggle: function (combo, on) {
+          if (on) delete dropped[b.key][combo];
+          else dropped[b.key][combo] = true;
+          countPicked();
+          setHeight();
+        },
+      });
+      combosBox.appendChild(table.node);
+      countPicked();
+      setHeight();
+    }
+
+    if (mode === "box") form.appendChild(drawBox(b, refresh));
+    else if (mode === "nagashi") form.appendChild(drawNagashi(b, refresh));
+    else form.appendChild(drawSlots(b, refresh));
+    panel.appendChild(form);
+
+    const sortWrap = el("div", { class: "sorts" });
+    [["odds", "オッズ順"], ["combo", "組み合わせ順"]].forEach(function (pair) {
+      const button = el("button", {
+        class: "mini", type: "button", text: pair[1],
+        "aria-pressed": (sorts[b.key] || "odds") === pair[0] ? "true" : "false",
+      });
+      button.addEventListener("click", function () {
+        sorts[b.key] = pair[0];
+        drawPanel(false);
+      });
+      sortWrap.appendChild(button);
+    });
+    resultHead.appendChild(countBox);
+    resultHead.appendChild(sortWrap);
+    resultHead.appendChild(add);
+    panel.appendChild(resultHead);
+
+    // 1点ずつ選ぶ（全選択・全解除）
+    pickLine.appendChild(pickCount);
+    [["全選択", true], ["全解除", false]].forEach(function (pair) {
+      const button = el("button", { class: "mini", type: "button", text: pair[0] });
+      button.addEventListener("click", function () {
+        dropped[b.key] = {};
+        if (!pair[1]) current.forEach(function (combo) { dropped[b.key][combo] = true; });
+        table.sync();
+        countPicked();
+      });
+      pickLine.appendChild(button);
+    });
+    panel.appendChild(pickLine);
+    panel.appendChild(combosBox);
+
+    // 全通りのオッズ（2頭の券種は軸ごとの縦並び、3頭の券種はオッズの低い順）
+    if (b.legs === 2) {
+      panel.appendChild(el("h3", { class: "section", text: "オッズ表（全" + b.count + "点）" }));
+      panel.appendChild(drawAxes(b));
+    } else {
+      panel.appendChild(el("h3", {
+        class: "section", text: "オッズの低い順（全" + b.count + "点のうち" + TOP_N + "点）",
+      }));
+      panel.appendChild(drawTop(b));
+    }
+    refresh();
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data || event.data.type !== "streamlit:render") return;
+    const args = event.data.args || {};
+    const next = args.payload || { betTypes: [], tabs: [], horses: [], frames: [], slip: [] };
+    // 中身が前と同じなら**描き直さない**（予想ボードの盤と同じ判定）。
+    // Streamlitは高さを受け取るたびに render を送り返してくるので、受けるたびに
+    // 作り直していると、押している最中の要素が差し替わってクリックが消える。
+    if (next.version && next.version === appliedVersion) {
+      // 取り込んだのに中身が変わらなかったとき（まだ発売されていない券種など）は、
+      // 「取り込み中…」になっている更新マークを元に戻すためだけに描き直す
+      if (waitingFetch) { waitingFetch = false; drawPanel(false); }
+      return;
+    }
+    appliedVersion = next.version || null;
+    waitingFetch = false;
+    // 買い目**以外**が前と同じか（金額を直しただけならここは変わらない）
+    const sameDraw = !!next.drawVersion && next.drawVersion === appliedDraw;
+    appliedDraw = next.drawVersion || null;
+    payload = next;
+    // **自分が保存した買い目が返ってきただけ**なら、何も描き直さない。
+    // 描き直すと、金額を直した瞬間に買い目の枠が組み直されて上まで戻ってしまう。
+    if (sameDraw && slipSignature(next.slip) === slipSignature(slip)) return;
+    // いま取り込んだ券種があれば、そのタブへ移る（押した券種が見えないと分かりにくい）
+    if (payload.focus && payload.focus !== appliedFocus && tab(payload.focus)) {
+      appliedFocus = payload.focus;
+      active = payload.focus;
+    }
+    if (!active || !tab(active)) {
+      // 取り込んである券種のうち先頭を開く（何も無ければ単勝・複勝のタブを開いておく）
+      const ready = (payload.tabs || []).filter(function (t) { return tabCount(t).available; });
+      active = (ready[0] || (payload.tabs || [])[0] || {}).key || null;
+    }
+    // DBの買い目は、**自分が出したばかりの保存より新しいときだけ**取り込む。
+    // （送った直後に届くpayloadは保存前の中身なので、そのまま入れると巻き戻る）
+    const serverAt = payload.slipSavedAt || null;
+    if (savedAt == null && serverAt !== appliedSlip) {
+      appliedSlip = serverAt;
+      slip = sortSlip((payload.slip || []).map(function (group) {
+        return {
+          group: nextGroup++, bet: group.bet, kind: group.kind || null,
+          combos: (group.combos || []).slice(),
+          amount: group.amount == null ? DEFAULT_AMOUNT : group.amount,
+        };
+      }), betOrder());
+    }
+    // 券種や馬のリストは、そこが変わったときだけ作り直す（選びかけを壊さないため）
+    if (!sameDraw) {
+      drawTabs();
+      drawPanel(false);
+    }
+    drawSlip();
+  });
+
+  send("streamlit:componentReady", { apiVersion: 1 });
+  setHeight();
+})();
+</script>
+</body>
+</html>
