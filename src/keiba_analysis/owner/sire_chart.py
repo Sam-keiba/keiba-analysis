@@ -56,7 +56,7 @@ def build_aei_spec(rows: list[SireYear], height: int = CHART_HEIGHT) -> dict:
             "x": x,
             "y": {
                 "field": "n_horses", "type": "quantitative", "title": HORSES_TITLE,
-                "axis": {"titleColor": "#7b8590", "grid": False},
+                "axis": {"titleColor": "#7b8590", "grid": False, "orient": "right"},
             },
             "tooltip": tooltip,
         },
@@ -69,7 +69,7 @@ def build_aei_spec(rows: list[SireYear], height: int = CHART_HEIGHT) -> dict:
             "y": {
                 "field": "aei", "type": "quantitative", "title": AEI_TITLE,
                 "scale": {"zero": True, "nice": True},
-                "axis": {"titleColor": AEI_COLOR},
+                "axis": {"titleColor": AEI_COLOR, "orient": "left"},
             },
             "tooltip": tooltip,
         },
@@ -92,8 +92,10 @@ def build_aei_spec(rows: list[SireYear], height: int = CHART_HEIGHT) -> dict:
         "height": height,
         "autosize": {"type": "fit-x", "contains": "padding"},
         "data": {"values": values},
-        # 棒（右軸・頭数）と折れ線（左軸・E・I）は単位が違うので、y軸を分ける
-        "layer": [bars, field_line, line, labels],
+        # 棒（右軸・頭数）と E・I（左軸）は単位が違うので、y軸を分ける。
+        # **分けるのは2組だけ**。基準線・折れ線・数字は1つの層にまとめて同じ軸を使わせる
+        # （4層を並べて independent にすると層ごとに軸ができ、1.00の破線が常に天井に張りつく）
+        "layer": [bars, {"layer": [field_line, line, labels]}],
         "resolve": {"scale": {"y": "independent"}},
     }
 
