@@ -1,7 +1,19 @@
 """血統クロス（インブリード）の集計。`horse_ancestors` と手元のレース結果から出す。
 
-`sire_runs.py` と同じ作り（Streamlitに依存しない純粋な関数）。集計範囲も同じで
-**2023年以降のJRAのレースだけ**。
+`sire_runs.py` と同じ作り（Streamlitに依存しない純粋な関数）。
+
+## 集計範囲
+
+数えるのは**5代血統表の62マスがそろった馬だけ**。`horse_ancestors` には2種類の行がある:
+
+- `source = 'netkeiba'`: 2023年以降に走った馬の、netkeiba の血統表（いつも62マスそろう）
+- `source = 'local'`: 2022年以前の馬を、keiba-data が手元のデータだけで組んだもの
+  （`keiba-data bloodline-local`）。**マスが欠けることがある**
+
+欠けたマスのある馬を混ぜると、その祖先を持っているのに「持たない」側に入ったり、
+クロスを見落としたりするので外す。その馬の走は2022年以前のものも含めて全部数える。
+祖先の番号は netkeiba の番号と `jv:<繁殖登録番号>` に割れることがまれにあるが、
+祖先は名前と産国で束ねているので影響しない。種牡馬は名寄せキー（`sire_runs.sire_filter`）で絞る。
 
 ## 何を出すか
 
@@ -12,10 +24,11 @@
 
 ## 取り込み途中の扱い
 
-血統表は1頭ずつ取り込むので、**入っている産駒だけで率を出すと母数が小さくなる**。
-どの関数も「血統表が入っている頭数」を一緒に返し、画面で進み具合を出せるようにする。
-持っていない産駒（`without`）も**血統表が入っている産駒だけ**を数える
-（入っていない産駒を「持たない」側に混ぜると、答えそのものが狂うため）。
+**血統表がそろっている産駒だけで率を出すので、母数は産駒の一部になる。**
+どの関数も「62マスそろった頭数」を一緒に返し、画面で範囲を出せるようにする。
+持っていない産駒（`without`）も**そろっている産駒だけ**を数える
+（そろっていない産駒を「持たない」側に混ぜると、答えそのものが狂うため）。
+netkeiba からの取り込み（`keiba-data bloodline`）の進み具合は、`netkeiba` の行で数える。
 """
 
 from __future__ import annotations
@@ -23,7 +36,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from keiba_analysis.shared.sire_runs import Tally
+from keiba_analysis.shared.sire_runs import Tally, sire_filter
 
 # 表に出す最低頭数（これ未満の祖先・クロスは並べても読めない）
 MIN_HORSES = 3
@@ -32,9 +45,14 @@ MERGED_NAMES = 3
 # 祖先別・クロス別に出す行数の上限
 TOP_ANCESTORS = 30
 TOP_CROSSES = 25
+# 5代血統表のマスの数（2+4+8+16+32）。これがそろった馬だけを数える
+FULL_CELLS = 62
+# その馬の血統表がそろっているか（主キー (horse_id, path) で1頭ずつ数えるので軽い）
+_HAS_FULL_PEDIGREE = (
+    f"(SELECT COUNT(*) FROM horse_ancestors a WHERE a.horse_id = {{horse}}) = {FULL_CELLS}"
+)
 
-# その種牡馬の産駒のうち、血統表が入っている馬の「1走1行」。
-# `horses.sire` で絞ったうえで、血統表がある馬だけに限る
+# その種牡馬の産駒のうち、血統表がそろった馬の「1走1行」。`{sire}` には種牡馬の絞り込みが入る
 _RUNS_SQL = """
     SELECT e.horse_id, h.horse_name, h.sex,
            ra.surface, re.finish_position, re.prize_man_yen
@@ -42,8 +60,8 @@ _RUNS_SQL = """
       JOIN horses  h  ON h.horse_id = e.horse_id
       JOIN races   ra ON ra.race_id = e.race_id
       JOIN results re ON re.race_id = e.race_id AND re.umaban = e.umaban
-     WHERE h.sire = ?
-       AND EXISTS (SELECT 1 FROM horse_ancestors a WHERE a.horse_id = e.horse_id)
+     WHERE {sire}
+       AND {full}
 """
 
 # その種牡馬の産駒が5代内に持つ祖先（1頭1祖先1行。同じ祖先が複数箇所なら代数を連ねる）
@@ -54,7 +72,7 @@ _ANCESTORS_SQL = """
       FROM horse_ancestors a
       JOIN pedigree_horses p ON p.horse_no = a.ancestor_no
       JOIN horses h ON h.horse_id = a.horse_id
-     WHERE h.sire = ?
+     WHERE {sire}
   GROUP BY a.horse_id, a.ancestor_no
 """
 
@@ -63,10 +81,10 @@ _ANCESTORS_SQL = """
 class Coverage:
     """血統表の取り込みがどこまで進んでいるか。"""
 
-    sire_horses: int      # その種牡馬の産駒として分かっている頭数
-    with_pedigree: int    # うち5代血統表が入っている頭数
-    known: int            # 血統表が入っている馬（DB全体）
-    total: int            # 出走した馬（DB全体）
+    sire_horses: int      # その種牡馬の産駒で、出走した頭数
+    with_pedigree: int    # うち5代血統表の62マスがそろっている頭数（＝集計の対象）
+    known: int            # netkeiba の血統表が入っている馬（DB全体）
+    total: int            # 2023年以降に走った馬（DB全体。netkeiba から取り込む対象）
 
     @property
     def is_complete(self) -> bool:
@@ -94,20 +112,27 @@ class CrossRow:
 
 
 def coverage(conn: sqlite3.Connection, sire_name: str) -> Coverage:
-    """血統表の取り込みの進み具合（その種牡馬ぶんと、DB全体）。"""
+    """集計の対象になる産駒の数と、netkeiba からの取り込みの進み具合。
+
+    その種牡馬ぶんは「出走した産駒」と「うち血統表がそろった産駒」。DB全体の数は
+    keiba-data の `count_bloodline` と同じく netkeiba の行で数える（2023年以降に走った馬が対象）。
+    """
+    sire, params = sire_filter(conn, sire_name)
     row = conn.execute(
-        "SELECT COUNT(DISTINCT h.horse_id) AS horses, "
-        "       COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM horse_ancestors a "
-        "              WHERE a.horse_id = h.horse_id) THEN h.horse_id END) AS with_ped "
-        "  FROM horses h WHERE h.sire = ? "
+        "SELECT COUNT(*) AS horses, "
+        f"       SUM(CASE WHEN {_HAS_FULL_PEDIGREE.format(horse='h.horse_id')} "
+        "                THEN 1 ELSE 0 END) AS with_ped "
+        f"  FROM horses h WHERE {sire} "
         "   AND EXISTS (SELECT 1 FROM entries e WHERE e.horse_id = h.horse_id)",
-        (sire_name,),
+        params,
     ).fetchone()
     whole = conn.execute(
         "SELECT COUNT(*) AS total, "
         "       SUM(CASE WHEN EXISTS (SELECT 1 FROM horse_ancestors a "
-        "                              WHERE a.horse_id = h.horse_id) THEN 1 ELSE 0 END) AS done "
-        "  FROM horses h WHERE EXISTS (SELECT 1 FROM entries e WHERE e.horse_id = h.horse_id)"
+        "                              WHERE a.horse_id = h.horse_id AND a.source = 'netkeiba') "
+        "                THEN 1 ELSE 0 END) AS done "
+        "  FROM horses h WHERE h.source = 'scrape' "
+        "   AND EXISTS (SELECT 1 FROM entries e WHERE e.horse_id = h.horse_id)"
     ).fetchone()
     return Coverage(
         sire_horses=row["horses"] or 0, with_pedigree=row["with_ped"] or 0,
@@ -120,10 +145,11 @@ def cross_label(generations: list[int]) -> str:
     return "×".join(str(g) for g in sorted(generations))
 
 
-def _runs_by_horse(conn: sqlite3.Connection, sire_name: str,
+def _runs_by_horse(conn: sqlite3.Connection, sire: str, params: tuple,
                    sex: str | None = None, surface: str | None = None) -> dict[str, list[dict]]:
-    """血統表が入っている産駒の走を、馬ごとにまとめる。"""
-    rows = [dict(r) for r in conn.execute(_RUNS_SQL, (sire_name,))]
+    """血統表がそろった産駒の走を、馬ごとにまとめる。`sire, params` は `sire_filter` の結果。"""
+    sql = _RUNS_SQL.format(sire=sire, full=_HAS_FULL_PEDIGREE.format(horse="e.horse_id"))
+    rows = [dict(r) for r in conn.execute(sql, params)]
     if sex:
         rows = [r for r in rows if r["sex"] == sex]
     if surface:
@@ -176,7 +202,8 @@ def _rows(
     sex: str | None, surface: str | None, min_horses: int, top: int,
 ) -> list[CrossRow]:
     """祖先別（`crosses_only=False`）／クロス別（True）の共通の組み立て。"""
-    by_horse = _runs_by_horse(conn, sire_name, sex, surface)
+    sire, params = sire_filter(conn, sire_name)
+    by_horse = _runs_by_horse(conn, sire, params, sex, surface)
     if not by_horse:
         return []
     all_runs = [run for runs in by_horse.values() for run in runs]
@@ -185,9 +212,9 @@ def _rows(
     groups: dict[tuple[str, str | None, str | None], set[str]] = {}
     # 代表を選ぶための「いちばん近い代」
     closest: dict[tuple[str, str | None, str | None], int] = {}
-    for row in conn.execute(_ANCESTORS_SQL, (sire_name,)):
+    for row in conn.execute(_ANCESTORS_SQL.format(sire=sire), params):
         if row["horse_id"] not in by_horse:
-            continue                      # 絞り込みで外れた馬・血統表が無い馬
+            continue                      # 絞り込みで外れた馬・血統表がそろわない馬
         generations = [int(g) for g in row["generations"].split(",")]
         if crosses_only and len(generations) < 2:
             continue

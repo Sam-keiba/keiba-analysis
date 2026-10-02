@@ -39,6 +39,15 @@ def test_full_width_digits_are_the_same_class():
     assert tier.race_level(race(class_condition="1勝クラス 牝")) == 1.0
 
 
+def test_old_class_names_read_as_the_current_ones():
+    """2022年以前（Target由来）の旧呼称は、今のクラスと同じレベルで読む。"""
+    assert tier.race_level(race(class_condition="500万下")) == 1.0
+    assert tier.race_level(race(class_condition="1000万下 牝")) == 2.0
+    assert tier.race_level(race(class_condition="900万下")) == 2.0
+    assert tier.race_level(race(class_condition="1600万下")) == 3.0
+    assert tier.race_level(race(class_condition="未出走")) == 0.0
+
+
 def test_unknown_class_has_no_level():
     assert tier.race_level(race()) is None
     assert tier.race_level(race(class_condition="謎の条件")) is None

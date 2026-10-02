@@ -43,6 +43,7 @@ import unicodedata
 from dataclasses import dataclass, replace
 
 from keiba_analysis.racing import horse_stats, pace
+from keiba_analysis.shared.race_name import modern_class
 
 # クラスの序列。1段＝クラス1つぶん。DBの class_condition / grade から引く。
 # grade が入っているレースの class_condition は実測で100%「オープン」系なので、
@@ -208,8 +209,9 @@ def race_level(race: dict) -> float | None:
     grade = (race.get("grade") or "").strip()
     if grade in GRADE_LEVEL:
         return GRADE_LEVEL[grade]
-    # 出馬表由来は全角数字（`１勝クラス`）なので、既存コードと同じくNFKCでそろえる
-    text = unicodedata.normalize("NFKC", race.get("class_condition") or "")
+    # 出馬表由来は全角数字（`１勝クラス`）なので、既存コードと同じくNFKCでそろえる。
+    # 2022年以前の旧呼称（`1000万下`）は今の呼称（`2勝クラス`）に読み替える
+    text = modern_class(unicodedata.normalize("NFKC", race.get("class_condition") or ""))
     for name, level in CLASS_LEVEL.items():
         if text.startswith(name):
             return level

@@ -2,6 +2,8 @@
 
 いちばん大事なのは**レース当時の馬主（`entries.owner_id`）で絞ること**。
 `horses.owner_name` はJRA公式の「現在の馬主」なので、転売された馬で食い違う。
+2022年以前の走（Target由来）はレース当時の馬主が無いので、書き出し時点の馬主
+（`entries.owner_id_at_export`。馬ごとの値を各走に写したもの）で代用する。
 """
 
 import pytest
@@ -13,13 +15,13 @@ OTHER = "サンデーレーシング"
 
 
 def _race(conn, race_id, *, grade=None, surface="turf", distance=1600, klass="1勝クラス",
-          date_="2025-04-05"):
+          date_="2025-04-05", source="scrape"):
     conn.execute("INSERT OR IGNORE INTO venues (venue_code, venue_name) VALUES ('05', '東京')")
     conn.execute(
         "INSERT INTO races (race_id, race_date, venue_code, kaiji, nichime, race_no, grade,"
-        " surface, distance_m, class_condition, fetched_at, updated_at)"
-        " VALUES (?, ?, '05', 1, 1, 1, ?, ?, ?, ?, '', '')",
-        (race_id, date_, grade, surface, distance, klass),
+        " surface, distance_m, class_condition, fetched_at, updated_at, source)"
+        " VALUES (?, ?, '05', 1, 1, 1, ?, ?, ?, ?, '', '', ?)",
+        (race_id, date_, grade, surface, distance, klass, source),
     )
 
 
@@ -177,3 +179,59 @@ def test_shared_aggregations_work_on_club_runs(seeded):
     assert sire_runs.turf_share(runs) == pytest.approx(1.0)
     by_age = {t.label: t for t in sire_runs.by_age(runs)}
     assert by_age["2歳"].starts == 2 and by_age["3歳"].starts == 1
+
+
+# --- 2022年以前（Target由来）の走 ---------------------------------------------------------
+
+def _owner_at_export(conn, horse_id, owner_id):
+    """書き出し時点の馬主。keiba-data と同じく、その馬の全走に同じ値を入れる。"""
+    conn.execute("UPDATE entries SET owner_id_at_export = ? WHERE horse_id = ?",
+                 (owner_id, horse_id))
+
+
+@pytest.fixture
+def with_old_runs(seeded):
+    """2010年の走を足す。レース当時の馬主（entries.owner_id）は空。
+
+    - H7: 書き出し時点の馬主がキャロット → キャロットの走として数える
+    - H8: 書き出し時点の馬主が分からない（1996年より前に生まれた馬）→ どこにも入らない
+    - H1: 2023年以降はキャロットで走ったが、書き出し時点の馬主はサンデー（転売の逆向き）。
+          レース当時の馬主がある走は、そちらを優先する
+    """
+    _race(seeded, "T1", date_="2010-06-12", klass="新馬", source="target")
+    _run(seeded, "T1", "H7", None, name="ムカシロット", sire="キズナ", finish=1, prize=500.0,
+         age=2, weight=440)
+    _run(seeded, "T1", "H8", None, name="フメイウマ", finish=2, umaban=2, prize=200.0, age=2)
+    _owner_at_export(seeded, "H7", "O1")
+    _owner_at_export(seeded, "H1", "O2")
+    seeded.commit()
+    return seeded
+
+
+def test_club_runs_use_the_owner_at_export_for_old_runs(with_old_runs):
+    runs = cd.club_runs(with_old_runs, "O1")
+    assert {r["horse_name"] for r in runs} == {"カロッタ", "カロツー", "ムカシロット"}
+    assert len(runs) == 4
+    assert {r["owner_id"] for r in runs} == {"O1"}
+
+
+def test_the_owner_at_the_race_wins_over_the_owner_at_export(with_old_runs):
+    """書き出し時点の馬主はレース当時の馬主が無い走にだけ使う。"""
+    assert "カロッタ" not in {r["horse_name"] for r in cd.club_runs(with_old_runs, "O2")}
+
+
+def test_club_summary_and_list_include_old_runs(with_old_runs):
+    carrot = {r["label"]: r for r in cd.club_summary(with_old_runs)}[CLUB]
+    assert (carrot["horses"], carrot["starts"], carrot["winners"]) == (3, 4, 2)
+    assert carrot["prize_per_horse"] == pytest.approx(700.0 / 3)
+    clubs = {c["label"]: c for c in cd.list_clubs(with_old_runs)}
+    assert clubs[CLUB]["horses"] == 3
+    assert clubs[OTHER]["horses"] == 1                    # H1 はサンデーに入らない
+
+
+def test_since_narrows_club_runs(with_old_runs):
+    assert len(cd.club_runs(with_old_runs, "O1", since="2023-01-01")) == 3
+    carrot = {r["label"]: r for r in cd.club_summary(with_old_runs, since="2023-01-01")}[CLUB]
+    assert (carrot["horses"], carrot["starts"]) == (2, 3)
+    clubs = {c["label"]: c for c in cd.list_clubs(with_old_runs, since="2023-01-01")}
+    assert clubs[CLUB]["horses"] == 2

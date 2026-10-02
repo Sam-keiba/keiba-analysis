@@ -1,25 +1,37 @@
 """種牡馬ごとの産駒成績を**手元のDB**から集計する（距離適性・BMS相性・代表産駒など）。
 
 JRA公式の種牡馬リーディング（`sire_data.py`）は年ごとの合計しか出していないので、
-距離・コース・性別・年齢といった内訳はここで作る。材料は `keiba pedigree` で埋めた
-`horses.sire` と、もともとDBにある `entries` / `results` / `races`。
+距離・コース・性別・年齢といった内訳はここで作る。材料は `horses.sire` と、
+もともとDBにある `entries` / `results` / `races`。
 
 ## 集計範囲がリーディングと違う
 
-**2023年以降のJRAのレースだけ**（DBに入っている範囲）。リーディング由来の数字は
-全期間なので、画面では必ず区別して出すこと（`sire_view.LOCAL_SCOPE` の注記）。
-地方・海外の出走、2022年以前の出走は入らない。
+既定は**1995年以降のJRAのレース全部**（DBに入っている範囲）。`since="2023-01-01"` のように
+渡せば、その日以降のレースだけに絞れる。リーディング由来の数字とは範囲が違うので、
+画面では必ず区別して出すこと（`sire_view.local_scope` の注記）。地方・海外の出走は入らない。
+
+DBは2023年以降をスクレイピング、1995〜2022年をTargetの書き出しから作っている
+（`races.source` / `horses.source` が 'scrape' / 'target'）。2022年以前の馬で気をつけること:
+
+- **1996年より前に生まれた馬は父が分からない**（`horses.sire` が空）。その産駒は数えられない
+- **外国産馬の父は英字のまま**のことがある。種牡馬は名前ではなく**名寄せキー**
+  （`horses.sire_key` / `broodmare_sire_key`。keiba-data が繁殖登録番号でつないだもの）で束ねる。
+  代表名は `stallions.name`、別表記は `stallion_names` にある
+- **クラスは旧呼称**（`500万下`）のまま。判定は `race_name.modern_class` を通す。
+  表示用のレース名は `races.race_name_plain`（付記なし・今の名前に寄せたもの）
 
 ## 母数
 
-血統は1頭ずつ取り込むので、**取り込みの途中では産駒の一部しか集計できない**。
-どの関数も「何頭ぶんか」を一緒に返し、画面で進み具合を出せるようにする。
+`keiba pedigree` が父を埋めるのは2023年以降に走った馬（`horses.source = 'scrape'`）なので、
+取り込みの進み具合（`coverage`）はその馬だけで数える。どの関数も「何頭ぶんか」を一緒に返す。
 """
 
 from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+
+from keiba_analysis.shared.race_name import classic_sql, display_race_name, is_classic
 
 # この走数に満たない区分は、画面で薄く描いて注意書きを添える
 MIN_RUNS = 20
@@ -32,9 +44,8 @@ DISTANCE_BANDS: tuple[tuple[int, str], ...] = (
 AGE_BANDS: tuple[tuple[int, str], ...] = ((2, "2歳"), (3, "3歳"), (4, "4歳"), (99, "5歳以上"))
 SURFACES: tuple[tuple[str, str], ...] = (("turf", "芝"), ("dirt", "ダート"))
 SEX_ORDER: tuple[str, ...] = ("牡", "牝", "セ")
-# クラシック（この6競走への出走で「クラシックに出た産駒」とみなす）。
-# DBのレース名には「第93回東京優駿」のように回数が付くので、**後方一致**で見る
-CLASSIC_RACES: tuple[str, ...] = ("皐月賞", "東京優駿", "菊花賞", "桜花賞", "優駿牝馬", "秋華賞")
+# 新馬戦にあたるクラス（`未出走` は新馬戦ができる前の呼び方）
+DEBUT_CLASSES: tuple[str, ...] = ("新馬", "未出走")
 # 社台グループの生産牧場（`breeder` の表記に含まれていれば社台グループとみなす）
 SHADAI_FARMS: tuple[str, ...] = (
     "ノーザンファーム", "社台ファーム", "追分ファーム", "白老ファーム",
@@ -44,11 +55,15 @@ SHADAI_FARMS: tuple[str, ...] = (
 # 集計の土台。**1行1走**で、馬・レース・結果をまとめて取る。
 # この形にだけ依存する集計（距離別・年齢別・デビュー時期…）は、絞り込みを差し替えれば
 # そのまま使い回せるので、**クラブ分析（club_data.py）とも共用する**。
+# `owner_id` はレース時点の馬主。2022年以前は入っていないので、Targetの書き出し時点の馬主
+# （`entries.owner_id_at_export`）で代用する（くわしくは club_data.py）
 _RUNS_SELECT = """
-    SELECT e.horse_id, h.horse_name, h.sex, h.sire, h.broodmare_sire, h.breeder,
-           e.age, e.horse_weight, e.owner_id,
+    SELECT e.horse_id, h.horse_name, h.sex, h.sire, h.sire_key,
+           h.broodmare_sire, h.broodmare_sire_key, h.breeder,
+           e.age, e.horse_weight, COALESCE(e.owner_id, e.owner_id_at_export) AS owner_id,
            t.trainer_name, t.stable,
-           ra.race_id, ra.race_date, ra.race_name, ra.grade, ra.surface, ra.distance_m,
+           ra.race_id, ra.race_date, ra.race_name, ra.race_name_plain, ra.grade, ra.surface,
+           ra.distance_m,
            ra.venue_code, ra.class_condition,
            CASE WHEN ra.surface = 'dirt' THEN ra.going_dirt ELSE ra.going_turf END AS going,
            re.finish_position, re.prize_man_yen
@@ -123,27 +138,68 @@ def _tally(rows: list[dict], label: str) -> Tally:
     )
 
 
-def runs_where(conn: sqlite3.Connection, where: str, params: tuple) -> list[dict]:
+def runs_where(conn: sqlite3.Connection, where: str, params: tuple, *,
+               since: str | None = None) -> list[dict]:
     """絞り込みを差し替えて「1行1走」を取る。
 
     種牡馬（`h.sire = ?`）でもクラブ（`e.owner_id = ?`）でも同じ形が返るので、
-    この下の集計関数がそのまま両方で使える。数千走までなので、1回引いて
-    Python側で切り分けるほうが読みやすく速い。
+    この下の集計関数がそのまま両方で使える。多くても数万走なので、1回引いて
+    Python側で切り分けるほうが読みやすく速い。`since`（'YYYY-MM-DD'）を渡すと
+    その日以降のレースだけにする。
     """
-    return [dict(r) for r in conn.execute(f"{_RUNS_SELECT} WHERE {where}", params)]
+    sql = f"{_RUNS_SELECT} WHERE ({where})"
+    if since:
+        sql += " AND ra.race_date >= ?"
+        params = (*params, since)
+    return [dict(r) for r in conn.execute(sql, params)]
 
 
-def sire_runs(conn: sqlite3.Connection, sire_name: str) -> list[dict]:
-    """その種牡馬の産駒の全走（1行1走）。ほかの集計はこれを材料にする。"""
-    return runs_where(conn, "h.sire = ?", (sire_name,))
+def sire_key(conn: sqlite3.Connection, sire_name: str) -> str | None:
+    """種牡馬名（カナでも英字でも）から名寄せキーを引く。分からなければ None。
+
+    `stallion_names`（keiba-data が作る別表記の一覧）で引き、無ければその名前の父を持つ馬の
+    キーを使う。どちらにも無い（キーの付いていない数十頭だけの父）ときは None。
+    """
+    row = conn.execute("SELECT sire_key FROM stallion_names WHERE name = ?", (sire_name,)).fetchone()
+    if row is None:
+        row = conn.execute(
+            "SELECT sire_key FROM horses WHERE sire = ? AND sire_key IS NOT NULL LIMIT 1",
+            (sire_name,),
+        ).fetchone()
+    return row[0] if row else None
+
+
+def stallion_name(conn: sqlite3.Connection, key: str) -> str | None:
+    """名寄せキーの代表名（2023年以降の馬が使う表記＝JRAの表記を優先したもの）。"""
+    row = conn.execute("SELECT name FROM stallions WHERE sire_key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def sire_filter(conn: sqlite3.Connection, sire_name: str) -> tuple[str, tuple]:
+    """その種牡馬の産駒に絞る条件（`horses h` 用）。キーが分かればキーで、無ければ名前で絞る。"""
+    key = sire_key(conn, sire_name)
+    return ("h.sire_key = ?", (key,)) if key else ("h.sire = ?", (sire_name,))
+
+
+def sire_runs(conn: sqlite3.Connection, sire_name: str, *, since: str | None = None) -> list[dict]:
+    """その種牡馬の産駒の全走（1行1走）。ほかの集計はこれを材料にする。別表記の産駒も含む。"""
+    where, params = sire_filter(conn, sire_name)
+    return runs_where(conn, where, params, since=since)
 
 
 def coverage(conn: sqlite3.Connection, runs: list[dict]) -> Coverage:
-    """血統の取り込みの進み具合。"""
+    """血統の取り込みの進み具合。
+
+    DB全体の数（`known` / `total`）は、`keiba pedigree` が父を埋める対象である
+    **2023年以降に走った馬（`horses.source = 'scrape'`）だけ**で数える。
+    2022年以前の馬はTargetで埋まっていて、残りの空欄（1996年より前に生まれた馬）は
+    取り込んでも埋まらないので、分母に入れると「未完了」がいつまでも消えない。
+    """
     row = conn.execute(
         "SELECT COUNT(*) AS total, "
         "       SUM(CASE WHEN sire IS NOT NULL AND sire <> '' THEN 1 ELSE 0 END) AS known "
-        "  FROM horses h WHERE EXISTS (SELECT 1 FROM entries e WHERE e.horse_id = h.horse_id)"
+        "  FROM horses h WHERE h.source = 'scrape' "
+        "   AND EXISTS (SELECT 1 FROM entries e WHERE e.horse_id = h.horse_id)"
     ).fetchone()
     return Coverage(
         sire_horses=len({r["horse_id"] for r in runs}), sire_runs=len(runs),
@@ -215,10 +271,30 @@ def by_going(runs: list[dict], surface: str) -> list[Tally]:
     ]
 
 
+def _bms_group(run: dict) -> str | None:
+    """母の父の束ね方。名寄せキーがあればキー、無ければ名前。"""
+    if run.get("broodmare_sire_key"):
+        return run["broodmare_sire_key"]
+    return f"name:{run['broodmare_sire']}" if run["broodmare_sire"] else None
+
+
 def by_broodmare_sire(runs: list[dict], top: int = 20) -> list[Tally]:
-    """母の父ごとの成績（BMS相性）。産駒の頭数が多い順。"""
-    names = {r["broodmare_sire"] for r in runs if r["broodmare_sire"]}
-    tallies = [_tally([r for r in runs if r["broodmare_sire"] == name], name) for name in names]
+    """母の父ごとの成績（BMS相性）。産駒の頭数が多い順。
+
+    カナと英字の表記ゆれは名寄せキー（`broodmare_sire_key`）で1行にまとめ、
+    見出しはその中で**いちばん多くの産駒に使われている表記**にする。
+    """
+    groups: dict[str, list[dict]] = {}
+    for run in runs:
+        if (group := _bms_group(run)) is not None:
+            groups.setdefault(group, []).append(run)
+    tallies = []
+    for members in groups.values():
+        spellings: dict[str, set[str]] = {}
+        for run in members:
+            spellings.setdefault(run["broodmare_sire"], set()).add(run["horse_id"])
+        label = min(spellings, key=lambda name: (-len(spellings[name]), name))
+        tallies.append(_tally(members, label))
     tallies.sort(key=lambda t: (-t.horses, -t.starts, t.label))
     return tallies[:top]
 
@@ -226,7 +302,8 @@ def by_broodmare_sire(runs: list[dict], top: int = 20) -> list[Tally]:
 def graded_wins(runs: list[dict]) -> list[dict]:
     """産駒が勝った重賞の一覧（新しい順）。"""
     wins = [
-        {"race_date": r["race_date"], "race_name": r["race_name"], "grade": r["grade"],
+        {"race_date": r["race_date"], "race_name": display_race_name(r),
+         "grade": r["grade"],
          "horse_name": r["horse_name"], "sex": r["sex"], "age": r["age"],
          "venue_code": r["venue_code"], "surface": r["surface"], "distance_m": r["distance_m"]}
         for r in runs if r["finish_position"] == 1 and r["grade"]
@@ -254,7 +331,8 @@ def top_progeny(runs: list[dict], top: int = 20) -> list[dict]:
             horse["wins"] += 1
             if run["grade"] and (horse["best_grade"] is None or
                                  _grade_rank(run["grade"]) < _grade_rank(horse["best_grade"])):
-                horse["best_grade"], horse["best_win"] = run["grade"], run["race_name"]
+                horse["best_grade"] = run["grade"]
+                horse["best_win"] = display_race_name(run)
         if (run["finish_position"] or 99) <= 3:
             horse["top3"] += 1
     ranked = sorted(horses.values(), key=lambda h: -h["prize_man_yen"])
@@ -272,8 +350,8 @@ def _grade_rank(grade: str | None) -> int:
 # --- 分析サマリーの空欄を埋めるためのもの -------------------------------------------
 
 def debut_runs(runs: list[dict]) -> list[dict]:
-    """産駒ごとの**新馬戦**の走（デビュー時期・デビュー時馬体重に使う）。"""
-    debuts = [r for r in runs if (r["class_condition"] or "").startswith("新馬")]
+    """産駒ごとの**新馬戦**の走（デビュー時期・デビュー時馬体重に使う）。`未出走` も含む。"""
+    debuts = [r for r in runs if (r["class_condition"] or "").startswith(DEBUT_CLASSES)]
     by_horse: dict[str, dict] = {}
     for run in debuts:                      # 同じ馬が2回出ることは無いが、念のため古いほうを採る
         current = by_horse.get(run["horse_id"])
@@ -352,10 +430,7 @@ def classic_rate(runs: list[dict]) -> float | None:
     horses = _horse_rows(runs)
     if not horses:
         return None
-    ran = {
-        r["horse_id"] for r in runs
-        if any((r["race_name"] or "").endswith(name) for name in CLASSIC_RACES)
-    }
+    ran = {r["horse_id"] for r in runs if is_classic(r["race_name"], r["grade"])}
     # 3歳以上まで走った産駒だけを分母にする（2歳のうちは出番が来ていないため）
     eligible = {r["horse_id"] for r in runs if (r["age"] or 0) >= 3}
     return len(ran & eligible) / len(eligible) if eligible else None
@@ -372,50 +447,75 @@ def board_rate(runs: list[dict]) -> float | None:
 MIN_LOCAL_HORSES = 5
 
 _SHADAI_LIKE = " OR ".join(f"h.breeder LIKE '%{farm}%'" for farm in SHADAI_FARMS)
-_CLASSIC_LIKE = " OR ".join(f"ra.race_name LIKE '%{name}'" for name in CLASSIC_RACES)
+_DEBUT_LIKE = " OR ".join(f"ra.class_condition LIKE '{name}%'" for name in DEBUT_CLASSES)
 
-# 種牡馬ごとに1行。走ベースの数と、`COUNT(DISTINCT ...)` による頭ベースの数を一度に取る
+# **馬ごと→種牡馬ごとの2段**で集計する。種牡馬ごとに `COUNT(DISTINCT 馬)` を並べる1段の集計は
+# 150万走では遅い（約7秒）ので、先に1頭1行にまとめて「その馬に当てはまるか」を0/1で持ち、
+# 外側で足す。1頭の父は1つなので、頭ベースの数は足すだけで重複しない（約4秒）。
+# `entries` は **NOT INDEXED** で頭から読む。`idx_entries_horse` の順に読むと
+# 150万回の飛び飛びの読み出しになり、かえって倍遅い。
+# 種牡馬は名寄せキーで束ね、見出しは `stallions.name`（キーの無い父は名前のまま）。
+# `{since}` には日付の絞り込み（無ければ空）が入る
 _LOCAL_STATS_SQL = f"""
-    SELECT h.sire AS sire,
-           COUNT(*)                                        AS starts,
-           COUNT(DISTINCT e.horse_id)                      AS horses,
-           SUM(re.finish_position = 1)                     AS wins,
-           SUM(re.finish_position <= 3)                    AS top3,
-           SUM(re.finish_position <= 5)                    AS top5,
-           SUM(ra.surface = 'turf')                        AS turf_starts,
-           SUM(ra.surface = 'dirt')                        AS dirt_starts,
-           SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'turf'
-                    THEN ra.distance_m END)                AS turf_win_distance,
-           SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'turf'
-                    THEN 1 END)                            AS turf_wins,
-           SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'dirt'
-                    THEN ra.distance_m END)                AS dirt_win_distance,
-           SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'dirt'
-                    THEN 1 END)                            AS dirt_wins,
-           COUNT(DISTINCT CASE WHEN ra.class_condition LIKE '新馬%'
-                               THEN e.horse_id END)        AS debuts,
-           COUNT(DISTINCT CASE WHEN ra.class_condition LIKE '新馬%'
-                          AND CAST(substr(ra.race_date, 6, 2) AS INTEGER) BETWEEN 6 AND 8
-                               THEN e.horse_id END)        AS early_debuts,
-           SUM(CASE WHEN ra.class_condition LIKE '新馬%'
-                    THEN e.horse_weight END)               AS debut_weight,
-           SUM(CASE WHEN ra.class_condition LIKE '新馬%' AND e.horse_weight IS NOT NULL
-                    THEN 1 END)                            AS debut_weight_n,
-           COUNT(DISTINCT CASE WHEN h.sex = 'セ' THEN e.horse_id END)     AS geldings,
-           COUNT(DISTINCT CASE WHEN h.sex IS NOT NULL AND h.sex <> ''
-                               THEN e.horse_id END)        AS sexed,
-           COUNT(DISTINCT CASE WHEN {_SHADAI_LIKE} THEN e.horse_id END)   AS shadai,
-           COUNT(DISTINCT CASE WHEN h.breeder IS NOT NULL AND h.breeder <> ''
-                               THEN e.horse_id END)        AS bred,
-           COUNT(DISTINCT CASE WHEN e.age >= 3 THEN e.horse_id END)       AS aged3,
-           COUNT(DISTINCT CASE WHEN e.age >= 3 AND ({_CLASSIC_LIKE})
-                               THEN e.horse_id END)        AS classic
-      FROM entries e
-      JOIN horses  h  ON h.horse_id = e.horse_id
-      JOIN races   ra ON ra.race_id = e.race_id
-      JOIN results re ON re.race_id = e.race_id AND re.umaban = e.umaban
-     WHERE h.sire IS NOT NULL AND h.sire <> ''
-  GROUP BY h.sire
+    WITH per_horse AS (
+        SELECT COALESCE(h.sire_key, 'name:' || h.sire) AS sire_group, h.sire AS sire_raw,
+               h.sex AS sex, h.breeder AS breeder,
+               ({_SHADAI_LIKE})                                AS is_shadai,
+               COUNT(*)                                        AS starts,
+               SUM(re.finish_position = 1)                     AS wins,
+               SUM(re.finish_position <= 3)                    AS top3,
+               SUM(re.finish_position <= 5)                    AS top5,
+               SUM(ra.surface = 'turf')                        AS turf_starts,
+               SUM(ra.surface = 'dirt')                        AS dirt_starts,
+               SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'turf'
+                        THEN ra.distance_m END)                AS turf_win_distance,
+               SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'turf'
+                        THEN 1 END)                            AS turf_wins,
+               SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'dirt'
+                        THEN ra.distance_m END)                AS dirt_win_distance,
+               SUM(CASE WHEN re.finish_position = 1 AND ra.surface = 'dirt'
+                        THEN 1 END)                            AS dirt_wins,
+               MAX(CASE WHEN {_DEBUT_LIKE} THEN 1 ELSE 0 END)  AS debut,
+               MAX(CASE WHEN ({_DEBUT_LIKE})
+                         AND CAST(substr(ra.race_date, 6, 2) AS INTEGER) BETWEEN 6 AND 8
+                        THEN 1 ELSE 0 END)                     AS early_debut,
+               SUM(CASE WHEN {_DEBUT_LIKE} THEN e.horse_weight END) AS debut_weight,
+               SUM(CASE WHEN ({_DEBUT_LIKE}) AND e.horse_weight IS NOT NULL
+                        THEN 1 END)                            AS debut_weight_n,
+               MAX(CASE WHEN e.age >= 3 THEN 1 ELSE 0 END)     AS aged3,
+               MAX(CASE WHEN e.age >= 3 AND {classic_sql()} THEN 1 ELSE 0 END) AS classic
+          FROM entries e NOT INDEXED
+          JOIN horses  h  ON h.horse_id = e.horse_id
+          JOIN races   ra ON ra.race_id = e.race_id
+          JOIN results re ON re.race_id = e.race_id AND re.umaban = e.umaban
+         WHERE h.sire IS NOT NULL AND h.sire <> '' {{since}}
+      GROUP BY e.horse_id
+    )
+    SELECT COALESCE(st.name, MIN(sire_raw)) AS sire,
+           SUM(starts)            AS starts,
+           COUNT(*)               AS horses,
+           SUM(wins)              AS wins,
+           SUM(top3)              AS top3,
+           SUM(top5)              AS top5,
+           SUM(turf_starts)       AS turf_starts,
+           SUM(dirt_starts)       AS dirt_starts,
+           SUM(turf_win_distance) AS turf_win_distance,
+           SUM(turf_wins)         AS turf_wins,
+           SUM(dirt_win_distance) AS dirt_win_distance,
+           SUM(dirt_wins)         AS dirt_wins,
+           SUM(debut)             AS debuts,
+           SUM(early_debut)       AS early_debuts,
+           SUM(debut_weight)      AS debut_weight,
+           SUM(debut_weight_n)    AS debut_weight_n,
+           SUM(sex = 'セ')        AS geldings,
+           SUM(sex IS NOT NULL AND sex <> '')         AS sexed,
+           SUM(COALESCE(is_shadai, 0))                AS shadai,
+           SUM(breeder IS NOT NULL AND breeder <> '') AS bred,
+           SUM(aged3)             AS aged3,
+           SUM(classic)           AS classic
+      FROM per_horse
+ LEFT JOIN stallions st ON st.sire_key = per_horse.sire_group
+  GROUP BY sire_group
 """
 
 
@@ -425,12 +525,15 @@ def _ratio(numerator, denominator) -> float | None:
     return (numerator or 0) / denominator
 
 
-def local_stats(conn: sqlite3.Connection) -> dict[str, dict]:
+def local_stats(conn: sqlite3.Connection, *, since: str | None = None) -> dict[str, dict]:
     """種牡馬ごとの手元DB集計 `{種牡馬名: 各種の合計}`。1クエリで全種牡馬ぶんを取る。
 
     分析サマリーの「全産駒平均」と、レーダーの段階付け（全種牡馬の中での位置）に使う。
+    別表記の産駒も名寄せキーで1行にまとまり、鍵は代表名（`stallions.name`）になる。
+    `since` を渡すとその日以降のレースだけ。
     """
-    return {r["sire"]: dict(r) for r in conn.execute(_LOCAL_STATS_SQL)}
+    sql = _LOCAL_STATS_SQL.format(since="AND ra.race_date >= ?" if since else "")
+    return {r["sire"]: dict(r) for r in conn.execute(sql, (since,) if since else ())}
 
 
 # 分析サマリーの「産駒の中身」に出す項目。(key, 見出し, 単位, 説明)

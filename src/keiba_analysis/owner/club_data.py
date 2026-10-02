@@ -4,15 +4,25 @@
 集計関数は**そちらのものをそのまま使い回す**。ここにはクラブ固有のもの
 （クラブの一覧・クラブどうしの比較・厩舎の使い方・種牡馬の使い方）だけを置く。
 
-集計範囲も同じで**2023年以降のJRAのレースだけ**。
+集計範囲も同じで、既定は**1995年以降のJRAのレース全部**（`since` で絞れる）。
 
 ## 馬主の扱いで気をつけること
 
-- **`entries.owner_id`（レース当時の馬主）で絞る。** `horses.owner_name` は
+- **その走の馬主は `entries.owner_id`（レース当時の馬主）。** `horses.owner_name` は
   JRA公式の「現在の馬主」なので、転売された馬で食い違う
   （Ｇ１レーシングで走った馬の `horses.owner_name` が個人名になっている、など）
+- **2022年以前の走は `entries.owner_id` が空**（Target由来の行にはレース当時の馬主が無く、
+  Targetの「馬主(レース時)」列も空で、埋める手段が無い）。そこだけ
+  **`entries.owner_id_at_export`（Targetを書き出した時点の馬主を各走に写したもの）で代用する**。
+  番号は `owner_id` と同じ体系。2023年以降の走で照合すると全体で97.4%一致し、
+  クラブの馬に限れば食い違うのは約0.6%（転売された馬）なので、クラブ単位の集計には十分使える。
+  古いレースほど転売で食い違いが増える。1996年より前に生まれた馬は馬主が無いので入らない
 - **`owners.owner_name` は10文字で切れている**（netkeibaのレース結果ページ由来）。
-  `owner_id` が本当の鍵なので集計には困らないが、**表示名は `CLUBS` に手で持たせる**
+  `owner_id` が本当の鍵なので集計には困らないが、**表示名は `CLUBS` に手で持たせる**。
+  ただし2022年以前にしか出てこない馬主はTarget由来の名前で、**切れていない**。
+  もう無い昔のクラブを `CLUBS` に足すときは、切らずに書く
+- 勝ち上がり率・1頭あたり賞金は「出走した馬」が分母なので、30年ぶんだと
+  とうに引退した馬も入った値になる。最近の傾向を見たいときは `since` で絞る
 """
 
 from __future__ import annotations
@@ -57,27 +67,40 @@ CLUBS: tuple[tuple[str, str, str], ...] = (
 # タマモ・大樹ファーム・ノースヒルズ・ビッグレッドファームは個人／法人の馬主なので入れない。
 
 CLUB_BY_OWNER_NAME = {db_name: (label, group) for db_name, label, group in CLUBS}
+# 画面に出す集計範囲の注記（種牡馬分析の `sire_view.LOCAL_SCOPE` とは但し書きが違う）
+CLUB_SCOPE = "1995年以降のJRA（2022年以前は現在の馬主で判定）"
 # 表に出す最低頭数（これ未満の調教師・種牡馬は並べても読めない）
 MIN_HORSES = 2
 TOP_TRAINERS = 20
 TOP_SIRES = 20
 
+# その走の馬主。レース当時の馬主が無い（2022年以前の）走だけ、書き出し時点の馬主で代用する
+_RUN_OWNER = "COALESCE(e.owner_id, e.owner_id_at_export)"
 
-def list_clubs(conn: sqlite3.Connection) -> list[dict]:
+
+def _since(since: str | None) -> tuple[str, tuple]:
+    """日付の絞り込み（`races ra` を結合しているクエリ用）。"""
+    return ("AND ra.race_date >= ?", (since,)) if since else ("", ())
+
+
+def list_clubs(conn: sqlite3.Connection, *, since: str | None = None) -> list[dict]:
     """`CLUBS` のうち**実際にDBにいる**クラブを、産駒の多い順に返す。"""
     if not CLUBS:
         return []
     names = [name for name, _label, _group in CLUBS]
     marks = ", ".join("?" * len(names))
+    date_filter, date_params = _since(since)
     rows = conn.execute(
         f"""
         SELECT o.owner_id, o.owner_name, COUNT(DISTINCT e.horse_id) AS horses
-          FROM entries e JOIN owners o USING(owner_id)
-         WHERE o.owner_name IN ({marks})
+          FROM entries e
+          JOIN owners o ON o.owner_id = {_RUN_OWNER}
+          JOIN races ra ON ra.race_id = e.race_id
+         WHERE o.owner_name IN ({marks}) {date_filter}
       GROUP BY o.owner_id
       ORDER BY horses DESC
         """,
-        names,
+        (*names, *date_params),
     )
     clubs = []
     for row in rows:
@@ -87,15 +110,24 @@ def list_clubs(conn: sqlite3.Connection) -> list[dict]:
     return clubs
 
 
-def club_runs(conn: sqlite3.Connection, owner_id: str) -> list[dict]:
-    """そのクラブの馬の全走（1行1走）。**レース当時の馬主**で絞る。"""
-    return runs_where(conn, "e.owner_id = ?", (owner_id,))
+def club_runs(conn: sqlite3.Connection, owner_id: str, *, since: str | None = None) -> list[dict]:
+    """そのクラブの馬の全走（1行1走）。**レース当時の馬主**で絞る。
+
+    レース当時の馬主が無い2022年以前の走は、書き出し時点の馬主（`owner_id_at_export`）で
+    絞る。`COALESCE` で書くより、この形のほうが2つの索引（`idx_entries_owner` /
+    `idx_entries_owner_export`）が効いて速い。
+    """
+    return runs_where(
+        conn,
+        "e.owner_id = ? OR (e.owner_id IS NULL AND e.owner_id_at_export = ?)",
+        (owner_id, owner_id), since=since,
+    )
 
 
 # --- クラブどうしの比較 -------------------------------------------------------------
 
-_SUMMARY_SQL = """
-    SELECT e.owner_id, o.owner_name,
+_SUMMARY_SQL = f"""
+    SELECT o.owner_id, o.owner_name,
            COUNT(DISTINCT e.horse_id) AS horses,
            COUNT(*) AS starts,
            COUNT(DISTINCT CASE WHEN re.finish_position = 1 THEN e.horse_id END) AS winners,
@@ -109,11 +141,11 @@ _SUMMARY_SQL = """
            COUNT(DISTINCT CASE WHEN ra.grade IS NOT NULL AND re.finish_position = 1
                                THEN e.horse_id END) AS graded_winners
       FROM entries e
-      JOIN owners  o  USING(owner_id)
+      JOIN owners  o  ON o.owner_id = {_RUN_OWNER}
       JOIN races   ra ON ra.race_id = e.race_id
       JOIN results re ON re.race_id = e.race_id AND re.umaban = e.umaban
-     WHERE o.owner_name IN ({marks})
-  GROUP BY e.owner_id
+     WHERE o.owner_name IN ({{marks}}) {{since}}
+  GROUP BY o.owner_id
 """
 
 
@@ -123,7 +155,7 @@ def _turf_rate(turf: int | None, dirt: int | None) -> float | None:
     return (turf or 0) / flat if flat else None
 
 
-def club_summary(conn: sqlite3.Connection) -> list[dict]:
+def club_summary(conn: sqlite3.Connection, *, since: str | None = None) -> list[dict]:
     """全クラブを並べて比べる（1クエリ）。
 
     **勝ち上がり率は「1勝でもした馬 ÷ 出走した馬」**（出走ではなく頭数が分母）。
@@ -133,8 +165,10 @@ def club_summary(conn: sqlite3.Connection) -> list[dict]:
     if not names:
         return []
     marks = ", ".join("?" * len(names))
+    date_filter, date_params = _since(since)
     rows = []
-    for row in conn.execute(_SUMMARY_SQL.format(marks=marks), names):
+    for row in conn.execute(_SUMMARY_SQL.format(marks=marks, since=date_filter),
+                            (*names, *date_params)):
         label, group = CLUB_BY_OWNER_NAME[row["owner_name"]]
         horses, starts = row["horses"] or 0, row["starts"] or 0
         rows.append({

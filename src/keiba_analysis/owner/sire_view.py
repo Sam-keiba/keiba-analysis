@@ -30,7 +30,7 @@ DASH = "—"
 class RadarAxis:
     """レーダーの1軸。`metric` が None ＝ この軸はまだ出せない。
 
-    `scope` は集計範囲（JRAリーディングは全期間、手元DBは2023年以降）。
+    `scope` は集計範囲（JRAリーディングは全期間、手元DBは `local_scope()` の範囲）。
     同じ絵の中で範囲が違うので、点の色を変えて凡例に出す。
     """
 
@@ -44,7 +44,7 @@ class RadarAxis:
 # 元にした画面と同じ6軸。JRA公式のリーディングから出せるのは3軸だけなので、
 # 残りは「データなし」として形だけ残す（後から埋められるように順番は変えない）
 # (軸, リーディング由来のキー, 手元DB由来のキー, 測っているもの, 出せない理由)
-# **リーディング由来は全期間・手元DB由来は2023年以降**なので、画面で必ず区別する
+# **リーディング由来は全期間・手元DB由来は手元のDBの範囲**なので、画面で必ず区別する
 RADAR_LAYOUT: tuple[tuple[str, str, str, str, str], ...] = (
     ("安定", "win_rate", "", "勝ち上がり率", ""),
     ("健康", "starts_per_horse", "", "年間平均出走回数", ""),
@@ -209,7 +209,7 @@ def render_radar(axes: list[RadarAxis], size: int = 300) -> str:
             )
             continue
         px, py = _point(cx, cy, radius * grade / GRADES, i, n)
-        # リーディング由来（全期間）は緑、手元DB由来（2023年以降）は青にする
+        # リーディング由来（全期間）は緑、手元DB由来（1995年以降など）は青にする
         local = axis.scope != "全期間"
         bar_color = LOCAL_ACCENT_SOFT if local else ACCENT_SOFT
         dot_color = LOCAL_ACCENT if local else ACCENT
@@ -335,29 +335,48 @@ CSS = f"""
 
 # --- 手元DBから出す表（距離適性・BMS相性・重賞実績・代表産駒） -----------------------
 
-# 手元DB由来であることの注記。リーディング由来（全期間）と混ぜないための目印
-LOCAL_SCOPE = "2023年以降のJRA"
-LOCAL_NOTE = (
-    f"この表は**手元のDBに入っている{LOCAL_SCOPE}のレース**だけを数えています"
-    "（JRAリーディング由来の数字は全期間なので、そろいません）。"
-)
+# 手元のDBに入っている最初の年（1995〜2022年はTarget、2023年以降はスクレイピング由来）
+DATA_SINCE_YEAR = 1995
+
+
+def local_scope(since: str | None = None) -> str:
+    """手元DB由来の集計範囲の表記。`since`（'YYYY-MM-DD'）は `sire_runs` に渡したものと同じ値。"""
+    year = int(since[:4]) if since else DATA_SINCE_YEAR
+    return f"{year}年以降のJRA"
+
+
+def local_note(since: str | None = None) -> str:
+    """手元DB由来の表に添える注記。リーディング由来（全期間）と混ぜないための目印。"""
+    return (
+        f"この表は**手元のDBに入っている{local_scope(since)}のレース**だけを数えています"
+        "（JRAリーディング由来の数字は全期間なので、そろいません）。"
+    )
+
+
+# 既定の範囲（`since` を渡さないとき）の表記
+LOCAL_SCOPE = local_scope()
+LOCAL_NOTE = local_note()
 
 
 def _rate(value: float | None) -> str:
     return f"{value * 100:.1f}%" if value is not None else DASH
 
 
-def render_coverage(coverage) -> str:
-    """血統の取り込みがどこまで進んでいるかの帯。取り込み途中でも数字が読めるように。"""
+def render_coverage(coverage, scope: str = LOCAL_SCOPE) -> str:
+    """血統の取り込みがどこまで進んでいるかの帯。取り込み途中でも数字が読めるように。
+
+    DB全体の数は `keiba pedigree` が父を埋める対象（2023年以降に走った馬）だけで数えている。
+    """
     ratio = f"{coverage.ratio * 100:.0f}%" if coverage.ratio is not None else DASH
     more = "" if coverage.is_complete else (
-        f'<span class="sc-more">DB全体では {coverage.known:,} / {coverage.total:,}頭（{ratio}）。'
+        f'<span class="sc-more">2023年以降に走った馬では {coverage.known:,} / '
+        f'{coverage.total:,}頭（{ratio}）の父が分かっています。'
         f'<code>uv run keiba pedigree</code> を実行すると増えます</span>'
     )
     return (
         f'<div class="sire-coverage">この種牡馬の産駒として分かっているのは'
         f'<b>{coverage.sire_horses:,}頭・{coverage.sire_runs:,}走</b>'
-        f'（{escape(LOCAL_SCOPE)}）{more}</div>'
+        f'（{escape(scope)}）{more}</div>'
     )
 
 
@@ -377,10 +396,11 @@ def render_tally_table(tallies, first_header: str = "区分") -> str:
     return f'<table class="sire-basis"><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table>'
 
 
-def render_graded_wins(wins: list[dict], venue_names: dict[str, str]) -> str:
+def render_graded_wins(wins: list[dict], venue_names: dict[str, str],
+                       scope: str = LOCAL_SCOPE) -> str:
     """産駒が勝った重賞の一覧（新しい順）。"""
     if not wins:
-        return f'<div class="sire-empty">{escape(LOCAL_SCOPE)}に産駒が勝った重賞はありません。</div>'
+        return f'<div class="sire-empty">{escape(scope)}に産駒が勝った重賞はありません。</div>'
     rows = []
     for w in wins:
         surface = {"turf": "芝", "dirt": "ダート", "jump": "障害"}.get(w["surface"] or "", "")
@@ -397,10 +417,10 @@ def render_graded_wins(wins: list[dict], venue_names: dict[str, str]) -> str:
     return f'<table class="sire-basis"><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table>'
 
 
-def render_top_progeny(progeny: list[dict]) -> str:
+def render_top_progeny(progeny: list[dict], scope: str = LOCAL_SCOPE) -> str:
     """獲得賞金の多い産駒。"""
     if not progeny:
-        return f'<div class="sire-empty">{escape(LOCAL_SCOPE)}に走った産駒がまだ分かっていません。</div>'
+        return f'<div class="sire-empty">{escape(scope)}に走った産駒がまだ分かっていません。</div>'
     rows = []
     for i, h in enumerate(progeny, 1):
         best = f'{h["best_grade"]} {h["best_win"]}' if h["best_grade"] else DASH

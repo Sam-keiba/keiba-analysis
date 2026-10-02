@@ -1,7 +1,11 @@
 """血統クロスの集計（dashboard/sire_cross.py）。
 
 小さなDBを組んで、「持つ／持たない」の切り分けとクロス表記を確かめる。
+集計は62マスそろった馬だけが対象なので、どの馬も `_fill` で残りのマスを埋める
+（埋めたマスは `pedigree_horses` に無い番号なので、祖先の表には出てこない）。
 """
+
+from itertools import product
 
 import pytest
 
@@ -19,10 +23,11 @@ def _race(conn, race_id, *, surface="turf"):
     )
 
 
-def _horse(conn, horse_id, name, *, sex="牡", sire=SIRE):
+def _horse(conn, horse_id, name, *, sex="牡", sire=SIRE, source="scrape", key=None):
+    """`key` は名寄せキー。省くと父名から作る（`K:父名`）。"""
     conn.execute(
-        "INSERT OR IGNORE INTO horses (horse_id, horse_name, sex, sire, updated_at)"
-        " VALUES (?, ?, ?, ?, '')", (horse_id, name, sex, sire))
+        "INSERT OR IGNORE INTO horses (horse_id, horse_name, sex, sire, updated_at, source, sire_key)"
+        " VALUES (?, ?, ?, ?, '', ?, ?)", (horse_id, name, sex, sire, source, key or f"K:{sire}"))
 
 
 def _run(conn, race_id, horse_id, *, finish=1, umaban=1):
@@ -33,13 +38,24 @@ def _run(conn, race_id, horse_id, *, finish=1, umaban=1):
         " VALUES (?, ?, ?, ?, 100.0)", (race_id, umaban, horse_id, finish))
 
 
-def _ancestor(conn, horse_id, path, no, name, country=None):
+def _ancestor(conn, horse_id, path, no, name, country=None, source="netkeiba"):
     conn.execute(
         "INSERT OR IGNORE INTO pedigree_horses (horse_no, name, country, updated_at)"
         " VALUES (?, ?, ?, '')", (no, name, country))
     conn.execute(
-        "INSERT INTO horse_ancestors (horse_id, path, generation, ancestor_no)"
-        " VALUES (?, ?, ?, ?)", (horse_id, path, len(path), no))
+        "INSERT OR REPLACE INTO horse_ancestors (horse_id, path, generation, ancestor_no, source)"
+        " VALUES (?, ?, ?, ?, ?)", (horse_id, path, len(path), no, source))
+
+
+ALL_PATHS = ["".join(p) for n in range(1, 6) for p in product("fm", repeat=n)]   # 62マス
+
+
+def _fill(conn, horse_id, *, source="netkeiba", leave_out=0):
+    """まだ入っていないマスを、表に出ない祖先で埋める。`leave_out` マスだけ空けておく。"""
+    for path in ALL_PATHS[leave_out:]:
+        conn.execute(
+            "INSERT OR IGNORE INTO horse_ancestors (horse_id, path, generation, ancestor_no, source)"
+            " VALUES (?, ?, ?, 'unknown', ?)", (horse_id, path, len(path), source))
 
 
 @pytest.fixture
@@ -60,6 +76,8 @@ def seeded(conn):
     _ancestor(conn, "B", "ffff", "sw", "Sadler's Wells", "米")
     _ancestor(conn, "B", "mmmmm", "sw", "Sadler's Wells", "米")
     _ancestor(conn, "C", "fffff", "nd", "Northern Dancer", "加")
+    for horse_id in ("A", "B", "C"):
+        _fill(conn, horse_id)
     conn.commit()
     return conn
 
@@ -159,3 +177,59 @@ def test_find_ancestor_searches_by_name(seeded):
 def test_empty_when_the_sire_has_no_pedigree(seeded):
     assert sc.ancestor_rows(seeded, "いない種牡馬", min_horses=1) == []
     assert sc.cross_rows(seeded, "いない種牡馬", min_horses=1) == []
+
+
+def test_full_cells_are_exactly_62():
+    assert len(ALL_PATHS) == sc.FULL_CELLS == 62
+
+
+def test_horses_with_missing_cells_are_left_out(seeded):
+    """マスが欠けた馬（手元のデータで組んだ古い馬）は、持つ側にも持たない側にも入れない。"""
+    _horse(seeded, "OLD", "ムカシウマ", source="target")
+    _run(seeded, "R1", "OLD", finish=1, umaban=8)
+    _ancestor(seeded, "OLD", "fffff", "sw", "Sadler's Wells", "米", source="local")
+    _fill(seeded, "OLD", source="local", leave_out=1)      # 61マス
+    seeded.commit()
+    coverage = sc.coverage(seeded, SIRE)
+    assert (coverage.sire_horses, coverage.with_pedigree) == (4, 3)
+    rows = {r.ancestor: r for r in sc.ancestor_rows(seeded, SIRE, min_horses=1)}
+    assert rows["Sadler's Wells"].horses == 2              # OLD は入らない
+    assert rows["Sadler's Wells"].without_tally.starts == 2
+
+
+def test_old_horses_with_a_full_local_pedigree_count(seeded):
+    """手元のデータで組んだ血統表でも、62マスそろっていれば数える。"""
+    _horse(seeded, "OLD", "ムカシウマ", source="target")
+    _run(seeded, "R1", "OLD", finish=1, umaban=8)
+    _ancestor(seeded, "OLD", "fffff", "sw", "Sadler's Wells", "米", source="local")
+    _fill(seeded, "OLD", source="local")
+    seeded.commit()
+    coverage = sc.coverage(seeded, SIRE)
+    assert (coverage.sire_horses, coverage.with_pedigree) == (4, 4)
+    assert coverage.is_complete
+    rows = {r.ancestor: r for r in sc.ancestor_rows(seeded, SIRE, min_horses=1)}
+    assert rows["Sadler's Wells"].horses == 3
+
+
+def test_progress_counts_only_netkeiba_pedigrees(seeded):
+    """取り込みの進み具合は、2023年以降に走った馬のうち netkeiba の血統表がある馬で数える。"""
+    _horse(seeded, "NEW", "アタラシイウマ")                # 2023年以降の馬・血統表まだ
+    _run(seeded, "R1", "NEW", finish=5, umaban=7)
+    _horse(seeded, "OLD", "ムカシウマ", source="target")   # 古い馬は分母に入らない
+    _run(seeded, "R1", "OLD", finish=6, umaban=8)
+    _fill(seeded, "OLD", source="local")
+    seeded.commit()
+    coverage = sc.coverage(seeded, SIRE)
+    assert (coverage.known, coverage.total) == (3, 4)
+
+
+def test_another_spelling_of_the_sire_is_included(seeded):
+    """父が英字表記の産駒も、名寄せキーが同じなら同じ種牡馬として数える。"""
+    _horse(seeded, "E", "エイジウマ", sire="Kizuna Test", key=f"K:{SIRE}")
+    _run(seeded, "R2", "E", finish=1, umaban=6)
+    _ancestor(seeded, "E", "fffff", "sw", "Sadler's Wells", "米")
+    _fill(seeded, "E")
+    seeded.commit()
+    assert sc.coverage(seeded, SIRE).sire_horses == 4
+    rows = {r.ancestor: r for r in sc.ancestor_rows(seeded, SIRE, min_horses=1)}
+    assert rows["Sadler's Wells"].horses == 3              # A・B に E が加わる

@@ -12,6 +12,8 @@ from urllib.parse import quote
 
 from keiba_data import config
 
+from keiba_analysis.shared.race_name import LEGACY_CLASSES, display_race_name, modern_class
+
 DASH = "—"
 
 # JRA公式のレース結果ページへのリンクに出すフィルムのアイコン。
@@ -80,14 +82,15 @@ def class_short(run: dict) -> str:
     """クラスの短縮表記。重賞はグレード（`GII`）、平場は `1勝` `未勝` `新馬` `OP` など。
 
     1. `grade` があればそれ
-    2. `class_condition`（全角が混ざるので NFKC 正規化。`牝`・`見習騎手` の付記は前方一致で落とす）
+    2. `class_condition`（全角が混ざるので NFKC 正規化。`牝`・`見習騎手` の付記は前方一致で落とす。
+       2022年以前の旧呼称 `500万下` などは今の呼称に読み替える）
     3. どちらも無ければレース名から拾う（`2歳未勝利` → `未勝`）
     分からなければ空文字。
     """
     grade = run.get("grade")
     if grade:
         return grade
-    condition = unicodedata.normalize("NFKC", run.get("class_condition") or "")
+    condition = modern_class(unicodedata.normalize("NFKC", run.get("class_condition") or ""))
     name = unicodedata.normalize("NFKC", run.get("race_name") or "")
     for full, short in CLASS_SHORT.items():
         if condition.startswith(full) or (not condition and full in name):
@@ -101,14 +104,16 @@ def short_race_label(run: dict) -> str:
     - 条件戦（レース名がクラスそのもの。`3歳以上1勝クラス` `2歳未勝利`）は
       **クラスだけ**（`1勝` `未勝`）。DBの7割はこれなので、凡例がぐっと短くなる
     - 名前のあるレースは `クラス 名前`（`3勝 オールスターJ第2戦` / `GII 関西TVローズS`）。
-      名前に付く `(3勝)` の付記と `第NN回` は落とし、長い名前は `…` で省略する
+      名前は `race_name_plain`（付記なし）を使い、それが無い dict では `(3勝)` の付記と `第NN回`、
+      Target略称の付記（`G1` `500` `・牝`）を落とす。長い名前は `…` で省略する
     """
     label = class_short(run)
-    name = _CLASS_SUFFIX.sub("", _RACE_NUMBER_PREFIX.sub("", run.get("race_name") or "")).strip()
+    name = display_race_name(run)
+    name = _CLASS_SUFFIX.sub("", _RACE_NUMBER_PREFIX.sub("", name)).strip()
     if not name:
         return label
     normalized = unicodedata.normalize("NFKC", name)
-    if any(word in normalized for word in CLASS_SHORT):  # 名前がクラスの言い回しそのもの
+    if any(word in normalized for word in (*CLASS_SHORT, *LEGACY_CLASSES)):  # 名前がクラスの言い回しそのもの
         return label or name
     if len(name) > NAME_LIMIT:
         name = name[: NAME_LIMIT - 1] + "…"
@@ -267,7 +272,8 @@ def format_time_diff(run: dict) -> str:
 
 
 def format_race_name(run: dict) -> str:
-    name = run.get("race_name") or DASH
+    """レース名（グレード）。`race_name_plain` を優先し、格を二重に出さない（`皐月賞G1(GI)` にしない）。"""
+    name = display_race_name(run) or DASH
     return f"{name}({run['grade']})" if run.get("grade") else name
 
 
