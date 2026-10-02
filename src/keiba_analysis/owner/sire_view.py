@@ -41,8 +41,7 @@ class RadarAxis:
     scope: str = "全期間"
 
 
-# 元にした画面と同じ6軸。JRA公式のリーディングから出せるのは3軸だけなので、
-# 残りは「データなし」として形だけ残す（後から埋められるように順番は変えない）
+# 5軸。元にした画面の「投資（クラブ馬回収率）」は募集価格がどこにも無く出せないので外した
 # (軸, リーディング由来のキー, 手元DB由来のキー, 測っているもの, 出せない理由)
 # **リーディング由来は全期間・手元DB由来は手元のDBの範囲**なので、画面で必ず区別する
 RADAR_LAYOUT: tuple[tuple[str, str, str, str, str], ...] = (
@@ -50,8 +49,6 @@ RADAR_LAYOUT: tuple[tuple[str, str, str, str, str], ...] = (
     ("健康", "starts_per_horse", "", "年間平均出走回数", ""),
     ("クラシック", "", "classic", "クラシック出走馬輩出率", ""),
     ("大物", "prize_per_horse", "", "1頭平均賞金", ""),
-    ("投資", "", "", "クラブ馬回収率",
-     "一口クラブの募集価格はどの公開サイトにも載っていない。"),
     ("堅実", "", "board", "掲示板入着率", ""),
 )
 
@@ -163,10 +160,10 @@ RADAR_TOP_PAD = 42
 
 
 def render_radar(axes: list[RadarAxis], size: int = 300) -> str:
-    """6軸のレーダー。**値が出せる軸だけ**を色付きの棒と点で描く。
+    """レーダー。**全軸の値がそろえば面（多角形）**で描き、頂点に点を打つ。
 
     出せない軸まで結んで多角形にすると、無い数字をあるように見せてしまう。
-    そこで多角形は「6軸ぜんぶ埋まったときだけ」描き、それまでは軸ごとの棒で出す。
+    そこで1軸でも欠けたときだけ、面をやめて値のある軸を棒と点で出す。
 
     `size` は**多角形の直径**。軸ラベルは外側に出るので、viewBoxはその外に
     余白（`RADAR_SIDE_PAD` / `RADAR_TOP_PAD`）を足した大きさにする。
@@ -178,6 +175,7 @@ def render_radar(axes: list[RadarAxis], size: int = 300) -> str:
     height = size + RADAR_TOP_PAD * 2
     cx, cy = width / 2, height / 2
     rings, spokes, bars, labels = [], [], [], []
+    complete = n > 0 and all(a.metric is not None and a.metric.grade is not None for a in axes)
 
     for grade in (3, 5, 7, 9):
         points = " ".join(
@@ -214,9 +212,10 @@ def render_radar(axes: list[RadarAxis], size: int = 300) -> str:
         bar_color = LOCAL_ACCENT_SOFT if local else ACCENT_SOFT
         dot_color = LOCAL_ACCENT if local else ACCENT
         bars.append(
-            f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{px:.1f}" y2="{py:.1f}" '
-            f'stroke="{bar_color}" stroke-width="9" stroke-linecap="round" />'
-            f'<circle cx="{px:.1f}" cy="{py:.1f}" r="6" fill="{dot_color}" />'
+            ("" if complete else
+             f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{px:.1f}" y2="{py:.1f}" '
+             f'stroke="{bar_color}" stroke-width="9" stroke-linecap="round" />')
+            + f'<circle cx="{px:.1f}" cy="{py:.1f}" r="{4 if complete else 6}" fill="{dot_color}" />'
         )
         labels.append(
             f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" class="sr-label">'
@@ -225,17 +224,18 @@ def render_radar(axes: list[RadarAxis], size: int = 300) -> str:
             f'{grade} / {GRADES}</text>'
         )
 
-    filled = [a for a in axes if a.metric is not None]
     polygon = ""
-    if len(filled) == n:
+    if complete:
         points = " ".join(
             f"{x:.1f},{y:.1f}" for x, y in (
-                _point(cx, cy, radius * (a.metric.grade or 1) / GRADES, i, n)
+                _point(cx, cy, radius * a.metric.grade / GRADES, i, n)
                 for i, a in enumerate(axes)
             )
         )
-        polygon = (f'<polygon points="{points}" fill="{ACCENT}" fill-opacity="0.18" '
-                   f'stroke="{ACCENT}" stroke-width="2" />')
+        # 点と同じ色（全軸が手元DB由来なら青、リーディング由来が混じれば緑）
+        color = LOCAL_ACCENT if all(a.scope != "全期間" for a in axes) else ACCENT
+        polygon = (f'<polygon points="{points}" fill="{color}" fill-opacity="0.25" '
+                   f'stroke="{color}" stroke-width="2" stroke-linejoin="round" />')
 
     return (
         f'<div class="sire-radar"><svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
