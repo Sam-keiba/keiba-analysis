@@ -29,6 +29,17 @@ JRA公式の種牡馬リーディングのE・Iを読む `keiba_data.sire_data` 
   兄弟の走は期間で切らず、それぞれ走った年の全馬平均と比べる。`since` / `until` は
   「どの年に走った産駒の母を対象にするか」に効く
 
+## 世代別（`crop_cpi_aei`）
+
+産駒を**生年**で区切って、世代ごとに上と同じ式で計算する（新しい式は作らない）。
+
+- **累計AEI**: その世代の産駒の、デビューから現時点までの全走（現役馬も含む）。全世代を
+  `combine_crops` で合算すると、通算AEIと同じ値になる
+- **CPI**: その世代の産駒の母が、別の種牡馬との間に産んだ馬（平地）。兄弟の走は世代で切らない。
+  同じ母が何世代にも産駒を持つと兄弟が重なって数えられるので、合算しても通算CPIとは一致しない
+- **is_partial**: 3歳シーズン（生年＋3年の12月31日）が終わっていない世代。値は変えず、
+  画面で「まだ動く」世代を薄く描くための目印
+
 ## 出せないもの
 
 - **地方・総合**: DBはJRAのレースしか持っていない（地方の賞金も、地方の全出走馬も無い）。
@@ -75,6 +86,7 @@ class HorseYear:
     prize_flat: float = 0.0   # うち平地
     ran: bool = True          # その年に出走したか（取消・除外だけなら False）
     ran_flat: bool = True     # その年に平地を出走したか
+    crop: int | None = None   # 生年（世代）。`birth_date` が無ければ「その年 − 馬齢」
 
 
 @dataclass(frozen=True)
@@ -109,6 +121,8 @@ _HORSE_YEARS_SQL = """
            CAST(substr(ra.race_date, 1, 4) AS INTEGER) AS year,
            COALESCE(h.sire_key, 'name:' || NULLIF(h.sire, '')) AS sire,
            NULLIF(h.dam_key, '') AS dam_no,
+           COALESCE(CAST(substr(NULLIF(h.birth_date, ''), 1, 4) AS INTEGER),
+                    CAST(substr(ra.race_date, 1, 4) AS INTEGER) - MAX(e.age)) AS crop,
            SUM(CASE WHEN {started} THEN COALESCE(re.prize_man_yen, 0) ELSE 0 END) AS prize,
            SUM(CASE WHEN {started} AND {flat} THEN COALESCE(re.prize_man_yen, 0) ELSE 0 END)
                                                                            AS prize_flat,
@@ -136,7 +150,7 @@ def horse_years(conn: sqlite3.Connection) -> list[HorseYear]:
         HorseYear(
             horse_id=r["horse_id"], year=r["year"], sire=r["sire"], dam_no=r["dam_no"],
             prize=r["prize"] or 0.0, prize_flat=r["prize_flat"] or 0.0,
-            ran=bool(r["ran"]), ran_flat=bool(r["ran_flat"]),
+            ran=bool(r["ran"]), ran_flat=bool(r["ran_flat"]), crop=r["crop"],
         )
         for r in conn.execute(_HORSE_YEARS_SQL)
     ]
@@ -217,16 +231,17 @@ def sire_group(conn: sqlite3.Connection, sire_name: str) -> str:
 def aei(rows: list[HorseYear], sire: str, *,
         since: int | str | None = None, until: int | str | None = None,
         flat_only: bool = False, min_horses: int = MIN_HORSES,
-        field: dict[int, FieldYear] | None = None) -> IndexResult:
+        field: dict[int, FieldYear] | None = None, crop: int | None = None) -> IndexResult:
     """AEI（中央）。`sire` はその種牡馬の名寄せキー（名前からは `sire_group` で作る）。
 
     `since` / `until` は年（`2023` か `'2023-01-01'`。年より細かくは切れない）。両端を含む。
     `field` は `field_by_year(rows, flat_only=...)` の結果を渡すと、全種牡馬ぶん回すときに速い。
+    `crop` を渡すと、その年に生まれた産駒（世代）だけにする。
     """
     since, until = _year(since), _year(until)
     field = field if field is not None else field_by_year(rows, flat_only=flat_only)
     picked = [r for r in rows if r.sire == sire and _ran(r, flat_only)
-              and _in_period(r.year, since, until)]
+              and _in_period(r.year, since, until) and (crop is None or r.crop == crop)]
     years = {r.year for r in picked}
     return _index(picked, field, flat_only=flat_only, min_horses=min_horses,
                   notes=_coverage_notes(years, field, "with_sire", "父"),
@@ -248,17 +263,20 @@ def yearly_aei(rows: list[HorseYear], sire: str, *,
 
 def cpi(rows: list[HorseYear], sire: str, *,
         since: int | str | None = None, until: int | str | None = None,
-        min_horses: int = MIN_HORSES, field: dict[int, FieldYear] | None = None) -> IndexResult:
+        min_horses: int = MIN_HORSES, field: dict[int, FieldYear] | None = None,
+        crop: int | None = None) -> IndexResult:
     """CPI（中央・平地のみ）。産駒の母が**別の種牡馬との間に産んだ馬**の稼ぎで測る。
 
     1. 期間内に出走した産駒の母（繁殖登録番号）を集める
     2. その母の産駒のうち、父が別の種牡馬の馬（＝半兄弟）を兄弟とする（父が分からない馬は除く）
     3. 兄弟の平地の全走を、走った年の全馬平均（平地）と比べる
-    `field` は `field_by_year(rows, flat_only=True)` の結果。
+    `field` は `field_by_year(rows, flat_only=True)` の結果。`crop` を渡すと、1の産駒を
+    その年に生まれた世代に絞る（兄弟は世代で絞らない）。
     """
     since, until = _year(since), _year(until)
     field = field if field is not None else field_by_year(rows, flat_only=True)
-    progeny = [r for r in rows if r.sire == sire and r.ran and _in_period(r.year, since, until)]
+    progeny = [r for r in rows if r.sire == sire and r.ran and _in_period(r.year, since, until)
+               and (crop is None or r.crop == crop)]
     mares = {r.dam_no for r in progeny if r.dam_no}
     if not progeny:
         return IndexResult(None, reason="期間内に出走した産駒がいない")
@@ -269,6 +287,103 @@ def cpi(rows: list[HorseYear], sire: str, *,
                 and r.sire != sire and r.ran_flat]
     return _index(siblings, field, flat_only=True, min_horses=min_horses, notes=notes,
                   empty_reason="産駒の母に、別の種牡馬との間の産駒（平地を走った馬）がいない")
+
+
+# --- 世代（産駒の生年）ごと --------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CropIndex:
+    """ある世代（同じ年に生まれた産駒）の累計AEIとCPI。出せない値は None で、理由が入る。
+
+    累計AEIは**現役馬も含めた現時点までの累計**（通算AEIと同じ式を、その世代の産駒だけで計算）。
+    CPIはその世代の産駒の母が、別の種牡馬との間に産んだ馬（平地）の稼ぎ（通算CPIと同じ定義）。
+    `*_denominator` は「Σ その年の全出走馬の1頭平均賞金」（のべ頭数ぶん）で、世代を合算するときに使う。
+    """
+
+    crop_year: int
+    cum_aei: float | None
+    aei_starters: int               # のべ出走頭数（AEIの母数）
+    aei_horses: int                 # 実頭数
+    aei_prize_man_yen: float
+    aei_denominator: float | None
+    cpi: float | None
+    cpi_siblings: int               # 兄弟の出走頭数（実頭数。CPIの母数）
+    cpi_starters: int               # 兄弟ののべ出走頭数
+    cpi_prize_man_yen: float
+    cpi_denominator: float | None
+    is_partial: bool                # 3歳シーズンが終わっていない世代（値は動く。画面で薄く描く目印）
+    aei_reason: str | None = None
+    cpi_reason: str | None = None
+    notes: tuple[str, ...] = ()
+
+
+def _denominator(result: IndexResult) -> float | None:
+    if result.field_per_horse is None:
+        return None
+    return result.field_per_horse * result.horses
+
+
+def is_partial_crop(crop_year: int, as_of: str) -> bool:
+    """3歳シーズン（生年＋3年の12月31日）が終わっていない世代か。`as_of` は 'YYYY-MM-DD'。"""
+    return as_of < f"{crop_year + 3}-12-31"
+
+
+def crop_cpi_aei(rows: list[HorseYear], sire: str, *, as_of: str,
+                 since: int | str | None = None, until: int | str | None = None,
+                 flat_only: bool = False, min_horses: int = MIN_HORSES,
+                 field: dict[int, FieldYear] | None = None,
+                 flat_field: dict[int, FieldYear] | None = None) -> list[CropIndex]:
+    """世代（産駒の生年）ごとの累計AEIとCPI。産駒が走った世代だけを古い順に返す。
+
+    `since` / `until` は**世代**（生年）を絞る（`2015` か `'2015-01-01'`、両端を含む）。
+    累計AEIの期間は切らない（デビューから現時点まで）。既定は障害込みで、画面の通算AEIと同じ。
+    `as_of` はDBの最終レース日で、`is_partial` の判定にだけ使う。
+    世代を合算するときは `combine_crops` を使う（のべ頭数で単純に重み付けすると、年ごとに
+    分母が違うぶんずれる）。
+    """
+    since, until = _year(since), _year(until)
+    field = field if field is not None else field_by_year(rows, flat_only=flat_only)
+    flat_field = flat_field if flat_field is not None else field_by_year(rows, flat_only=True)
+    # 何度も全行をなめないよう、その種牡馬の産駒と、その母の産駒（兄弟の候補）を先に取り出す
+    mine = [r for r in rows if r.sire == sire]
+    mares = {r.dam_no for r in mine if r.dam_no}
+    family = mine + [r for r in rows if r.dam_no in mares and r.sire != sire]
+    crops = sorted({r.crop for r in mine if r.crop is not None and _ran(r, flat_only)
+                    and _in_period(r.crop, since, until)})
+    out = []
+    for crop in crops:
+        a = aei(mine, sire, flat_only=flat_only, min_horses=min_horses, field=field, crop=crop)
+        c = cpi(family, sire, min_horses=min_horses, field=flat_field, crop=crop)
+        out.append(CropIndex(
+            crop_year=crop, cum_aei=a.value, aei_starters=a.horses, aei_horses=a.distinct_horses,
+            aei_prize_man_yen=a.prize_man_yen, aei_denominator=_denominator(a),
+            cpi=c.value, cpi_siblings=c.distinct_horses, cpi_starters=c.horses,
+            cpi_prize_man_yen=c.prize_man_yen, cpi_denominator=_denominator(c),
+            is_partial=is_partial_crop(crop, as_of),
+            aei_reason=a.reason, cpi_reason=c.reason,
+            notes=tuple(dict.fromkeys((*a.notes, *c.notes))),
+        ))
+    return out
+
+
+def combine_crops(crops: list[CropIndex]) -> tuple[float | None, float | None]:
+    """世代を合算した (AEI, CPI)。Σ賞金 ÷ Σ分母で、値の出ない世代（頭数不足など）も材料は足す。
+
+    AEIは、全世代を足すと**通算AEI（`aei`）と同じ値**になる。各世代の累計AEIを
+    `aei_denominator` で重み付けした平均と同じこと。のべ出走頭数で重み付けすると、
+    走った年によって分母（全馬の1頭平均賞金）が違うぶんずれる。
+    CPIは通算CPI（`cpi`）とは一致しない。同じ母が何世代にも産駒を持つと、その兄弟が
+    世代の数だけ数えられるため（通算CPIは母ごとに1回）。
+    """
+    def ratio(prize: float, denominator: float) -> float | None:
+        return prize / denominator if denominator else None
+
+    return (
+        ratio(sum(c.aei_prize_man_yen for c in crops if c.aei_denominator),
+              sum(c.aei_denominator or 0 for c in crops)),
+        ratio(sum(c.cpi_prize_man_yen for c in crops if c.cpi_denominator),
+              sum(c.cpi_denominator or 0 for c in crops)),
+    )
 
 
 # --- DBから一気に（画面用の便利関数） -----------------------------------------------------
@@ -301,3 +416,22 @@ def sire_cpi(conn: sqlite3.Connection, sire_name: str, *, scope: str = SCOPE_CEN
         return missing
     rows = rows if rows is not None else horse_years(conn)
     return cpi(rows, sire_group(conn, sire_name), since=since, until=until, min_horses=min_horses)
+
+
+def last_race_date(conn: sqlite3.Connection) -> str | None:
+    """結果の入っている最後のレースの日付（世代の `is_partial` の判定に使う）。"""
+    row = conn.execute(
+        "SELECT MAX(ra.race_date) FROM races ra "
+        "WHERE EXISTS (SELECT 1 FROM results re WHERE re.race_id = ra.race_id)"
+    ).fetchone()
+    return row[0] if row else None
+
+
+def sire_crop_cpi_aei(conn: sqlite3.Connection, sire_name: str, *,
+                      since: int | str | None = None, until: int | str | None = None,
+                      flat_only: bool = False, min_horses: int = MIN_HORSES,
+                      rows: list[HorseYear] | None = None) -> list[CropIndex]:
+    """その種牡馬の世代別の累計AEIとCPI（中央のみ）。`rows` は `sire_aei` と同じ。"""
+    rows = rows if rows is not None else horse_years(conn)
+    return crop_cpi_aei(rows, sire_group(conn, sire_name), as_of=last_race_date(conn) or "",
+                        since=since, until=until, flat_only=flat_only, min_horses=min_horses)

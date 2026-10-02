@@ -258,3 +258,137 @@ def test_sire_without_a_key_falls_back_to_the_name(seeded):
     rows = si.horse_years(seeded)
     assert {r.sire for r in rows if r.horse_id == "X"} == {f"name:{OTHER}"}
     assert si.sire_aei(seeded, OTHER, min_horses=1, rows=rows).distinct_horses == 1
+
+
+# --- 世代（産駒の生年）ごと --------------------------------------------------------------
+
+AS_OF = "2026-09-27"
+
+
+def cy(horse_id, year, crop, sire=SIRE, prize=0.0, **kw):
+    """生年つきの1頭1年の行。"""
+    return HorseYear(**{**hy(horse_id, year, sire, prize, **kw).__dict__, "crop": crop})
+
+
+def test_crops_are_returned_oldest_first_and_since_narrows_them():
+    rows = [cy("A", 2024, 2021, prize=100), cy("B", 2024, 2020, prize=100),
+            cy("X", 2024, 2020, sire=OTHER, prize=100)]
+    assert [c.crop_year for c in si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)] \
+        == [2020, 2021]
+    assert [c.crop_year for c in si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, since=2021,
+                                                 min_horses=1)] == [2021]
+
+
+def test_crop_aei_is_one_or_two_against_the_field():
+    rows = [cy("A", 2024, 2021, prize=100), cy("B", 2024, 2020, prize=400),
+            cy("X", 2024, 2020, sire=OTHER, prize=100), cy("Y", 2024, 2020, sire=OTHER, prize=200)]
+    # 全4頭の平均は 200。2021年生まれ(A)は 100 → 0.5、2020年生まれ(B)は 400 → 2.0
+    crops = {c.crop_year: c for c in si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)}
+    assert crops[2021].cum_aei == pytest.approx(0.5)
+    assert crops[2020].cum_aei == pytest.approx(2.0)
+
+
+def test_crop_aei_is_cumulative_and_weights_each_years_field():
+    """年をまたいで走った世代はのべで数え、年ごとの全馬平均を頭数で重み付けする。"""
+    rows = [
+        cy("A", 2023, 2020, prize=200), cy("X", 2023, 2019, sire=OTHER, prize=0),     # 2023年平均 100
+        cy("A", 2024, 2020, prize=300), cy("B", 2024, 2020, prize=300),
+        cy("Y", 2024, 2019, sire=OTHER, prize=300),                                   # 2024年平均 300
+    ]
+    crop = si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)[0]
+    assert (crop.aei_starters, crop.aei_horses) == (3, 2)
+    assert crop.aei_denominator == pytest.approx(100 + 300 + 300)
+    assert crop.cum_aei == pytest.approx(800 / 700)
+
+
+def test_combined_crops_match_the_lifetime_aei():
+    """全世代を合算すると、通算AEI（`aei`）と同じ値になる。"""
+    rows = [
+        cy("A", 2022, 2019, prize=500), cy("A", 2023, 2019, prize=100),
+        cy("B", 2023, 2020, prize=50), cy("B", 2024, 2020, prize=700),
+        cy("C", 2024, 2021, prize=0),
+        cy("X", 2022, 2018, sire=OTHER, prize=100), cy("Y", 2023, 2018, sire=OTHER, prize=300),
+        cy("Z", 2024, 2019, sire=OTHER, prize=50),
+    ]
+    crops = si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)
+    lifetime = si.aei(rows, SIRE, min_horses=1).value
+    assert si.combine_crops(crops)[0] == pytest.approx(lifetime)
+    # のべ頭数で単純に重み付けすると、年ごとの分母が違うぶんずれる
+    by_starts = sum(c.cum_aei * c.aei_starters for c in crops) / sum(c.aei_starters for c in crops)
+    assert by_starts != pytest.approx(lifetime)
+
+
+def test_combined_crops_keep_thin_crops_in_the_total():
+    """頭数不足で値の出ない世代も、合算の材料には入れる（通算と一致させるため）。"""
+    rows = [cy("A", 2024, 2020, prize=400), cy("B", 2024, 2021, prize=0),
+            cy("X", 2024, 2019, sire=OTHER, prize=200)]
+    crops = si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=2)
+    assert all(c.cum_aei is None and "2頭未満" in c.aei_reason for c in crops)
+    assert crops[0].aei_horses == 1
+    assert si.combine_crops(crops)[0] == pytest.approx(si.aei(rows, SIRE, min_horses=1).value)
+
+
+def test_crop_cpi_uses_only_that_crops_mares():
+    rows = [
+        cy("A", 2024, 2020, dam="M1", prize=0), cy("B", 2024, 2021, dam="M2", prize=0),
+        cy("C", 2024, 2018, sire=OTHER, dam="M1", prize=400),        # A の半兄
+        cy("D", 2024, 2019, sire=OTHER, dam="M2", prize=0),          # B の半兄
+        cy("E", 2024, 2019, dam="M1", prize=900),                    # A の全兄（数えない）
+    ]
+    crops = {c.crop_year: c for c in si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)}
+    assert crops[2020].cpi_siblings == 1                             # C だけ
+    # 全馬の平地平均 (0+0+400+0+900)/5 = 260、C は 400
+    assert crops[2020].cpi == pytest.approx(400 / 260)
+    assert crops[2021].cpi == pytest.approx(0.0)
+
+
+def test_crop_cpi_is_flat_only():
+    rows = [cy("A", 2024, 2020, dam="M1"),
+            cy("J", 2024, 2018, sire=OTHER, dam="M1", prize=900, flat=0, ran_flat=False),
+            cy("C", 2024, 2018, sire=OTHER, dam="M1", prize=100)]
+    crop = si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)[0]
+    assert crop.cpi_siblings == 1
+
+
+def test_siblings_shared_by_two_crops_are_counted_in_both():
+    """同じ母の産駒が2世代にいると、兄弟は両方の世代に入る（合算が通算CPIとずれる理由）。"""
+    rows = [cy("A", 2024, 2020, dam="M1"), cy("B", 2024, 2021, dam="M1"),
+            cy("C", 2024, 2017, sire=OTHER, dam="M1", prize=300),
+            cy("X", 2024, 2017, sire=OTHER, dam="M9", prize=100)]
+    crops = si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)
+    assert [c.cpi_siblings for c in crops] == [1, 1]
+    assert si.cpi(rows, SIRE, min_horses=1).distinct_horses == 1
+
+
+def test_crop_without_siblings_returns_none_with_a_reason():
+    rows = [cy("A", 2024, 2020, dam="M1", prize=100), cy("X", 2024, 2018, sire=OTHER, prize=100)]
+    crop = si.crop_cpi_aei(rows, SIRE, as_of=AS_OF, min_horses=1)[0]
+    assert crop.cpi is None and crop.cpi_reason
+    assert crop.cum_aei == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(("crop_year", "as_of", "partial"), [
+    (2023, "2026-09-27", True),        # 3歳の12月31日（2026-12-31）より前
+    (2023, "2026-12-31", False),
+    (2022, "2026-09-27", False),
+])
+def test_is_partial_until_the_end_of_the_three_year_old_season(crop_year, as_of, partial):
+    assert si.is_partial_crop(crop_year, as_of) is partial
+
+
+def test_horse_years_take_the_crop_from_the_birth_date(seeded):
+    seeded.execute("UPDATE horses SET birth_date = '2020-04-01' WHERE horse_id = 'A'")
+    seeded.execute("UPDATE entries SET age = 4 WHERE horse_id = 'X'")   # 生年なし → 2024 − 4
+    seeded.commit()
+    rows = {(r.horse_id, r.year): r for r in si.horse_years(seeded)}
+    assert rows[("A", 2024)].crop == 2020
+    assert rows[("X", 2024)].crop == 2020
+
+
+def test_sire_crop_cpi_aei_from_the_db(seeded):
+    seeded.execute("UPDATE horses SET birth_date = '2021-03-01' WHERE horse_id IN ('A', 'B')")
+    seeded.commit()
+    crops = si.sire_crop_cpi_aei(seeded, SIRE, min_horses=1)
+    assert [c.crop_year for c in crops] == [2021]
+    assert crops[0].aei_horses == 2
+    assert crops[0].is_partial is False          # 結果の最後は2025-04-01 → 2024年末で3歳が終わる
