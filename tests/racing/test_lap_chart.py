@@ -208,9 +208,9 @@ def test_default_number_of_runs():
     assert DEFAULT_CHART_RUNS == 5
 
 
-def test_phase_axis_is_fixed_between_10_5_and_14_5():
+def test_phase_axis_is_fixed_between_10_5_and_13_5():
     """縦軸は固定（馬やレースが変わっても同じ尺度で見比べられるように）。"""
-    assert PHASE_Y_DOMAIN == [10.5, 14.5]
+    assert PHASE_Y_DOMAIN == [10.5, 13.5]
     spec = build_phase_spec(build_phase_rows([LONG]))
     assert spec["layer"][0]["encoding"]["y"]["scale"]["clamp"] is True
 

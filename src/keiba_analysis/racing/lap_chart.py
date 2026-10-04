@@ -308,9 +308,10 @@ def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT) -> dict:
 
 PHASE_X_TITLE = "レースの区分"
 PHASE_Y_TITLE = "1Fあたりのラップ（秒）"
-# 縦軸は10.5〜14.5秒に固定する（どの馬・どのレースでも同じ尺度で見比べられるように）。
+# 縦軸は10.5〜13.5秒に固定する（どの馬・どのレースでも同じ尺度で見比べられるように）。
+# 実際の走りはほぼこの中に収まるので、上下を詰めて差を見やすくしている。
 # DB全体では9.8〜15.1秒まで散るので、はみ出す値は clamp で軸の端に描く（数値はtooltipで見える）。
-PHASE_Y_DOMAIN = [10.5, 14.5]
+PHASE_Y_DOMAIN = [10.5, 13.5]
 # 横に6点なので、200m版より少しだけ縦を詰める
 PHASE_CHART_HEIGHT = 480
 
