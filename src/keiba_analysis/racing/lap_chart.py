@@ -43,6 +43,8 @@ REFERENCE_LAP_KIND = "個別推定ラップ（参考）"
 X_TITLE = "スタートからの距離(m)"
 Y_TITLE = "ラップタイム（秒）"
 LEGEND_TITLE = "レース（開催・コース・レース名）"
+# 走ごとの線の色（競馬新聞リデザインの5色。直近走から順に使い、足りなければ繰り返す）
+LINE_COLORS = ["#e2382f", "#201f1d", "#2b4a6b", "#9a9795", "#b8892b"]
 
 # 軸は全馬・全レースで固定する（馬同士を見比べられるように）
 X_DOMAIN = [0, 3200]
@@ -188,7 +190,7 @@ def _color(color_legend: bool, races: list[str]) -> dict:
         "type": "nominal",
         "title": LEGEND_TITLE,
         "sort": races,
-        "scale": {"scheme": "tableau10"},
+        "scale": {"range": LINE_COLORS},
         "legend": {
             # 主役はグラフ本体なので、凡例は下に小さく・横並びで出す
             "orient": "bottom", "direction": "horizontal", "columns": 4,

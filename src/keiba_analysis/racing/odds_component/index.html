@@ -19,6 +19,8 @@
   控えで、JRA-IPATのような投票の導線は言葉も含めて一切置かない。
 -->
 <style>
+  /* 競馬新聞のフォント（@importは<style>の先頭でないと効かない） */
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
   :root {
     --line: #e3e6e3;
     --line-strong: #c9cfc9;
@@ -281,6 +283,144 @@
   .slip-foot .bulk { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
   .slip-total { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
   .slip-total .yen { margin-left: auto; font-size: 20px; font-weight: 700; color: var(--accent); }
+
+  /* =====================================================================
+     Modernist（競馬新聞リデザイン。keiba-app の design_handoff README §5）
+     上の指定を**変数と上書きで置き換える**だけで、描画と操作（JS）は変えていない。
+     角丸なし・2pxの罫線・緑のアクセント。色の値は README のトークンのまま。
+     ===================================================================== */
+  :root {
+    --line: #d7d3d3;            /* neutral-300（行の区切り） */
+    --line-strong: #201e1d;     /* 主の罫線 */
+    --ink: #201e1d;
+    --muted: #7d7979;           /* neutral-600 */
+    --accent: #1a7f4b;
+    --accent-700: #0f5632;
+    --head: #201e1d;            /* 表の見出し行は黒地・白文字 */
+    --zebra: transparent;
+    --selected: #f8f4f4;        /* neutral-100（選んだ行・買い目） */
+    --pop1: #e2382f;
+    --pop2: #2168c3;
+    --pop3: #189a54;
+  }
+  * { border-radius: 0 !important; }
+  body {
+    background: transparent;
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  }
+  .wrap { gap: 32px; }
+  .slip { flex: 1 1 340px; max-width: 420px; }
+  input[type="checkbox"] { accent-color: var(--accent); }
+
+  /* 券種タブ: 2pxの枠で並べ、選択中は黒地・白文字 */
+  .tabs { gap: 0; border-bottom: 2px solid var(--line-strong); }
+  .tab {
+    border: 2px solid var(--line-strong); border-bottom: none; margin: 0 0 -2px -2px;
+    background: transparent; color: var(--ink); padding: 10px 18px;
+    font-size: 14px; font-weight: 900; white-space: nowrap;
+  }
+  .tab:first-child { margin-left: 0; }
+  .tab:hover { background: var(--selected); color: var(--ink); }
+  .tab[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tab.empty { color: #9b9797; }
+  .tab[aria-selected="true"].empty { color: #d4d1d0; }
+  .tab .n { font-size: 11px; font-weight: 400; margin-left: 6px; color: var(--muted); }
+  .tab[aria-selected="true"] .n { color: #d4d1d0; }
+
+  .panel { padding: 20px 0 4px; }
+  .head-line { gap: 12px; margin-bottom: 10px; }
+  .head-line strong { font-size: 16px; font-weight: 900; }
+  /* 更新マーク: 取り込める印だと分かるよう、枠を太くして緑にする */
+  .refresh {
+    border: 2px solid var(--line-strong); background: transparent; color: var(--ink);
+    padding: 3px 10px; font-size: 11px; font-weight: 700;
+  }
+  .refresh:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .chip-text { font-size: 11px; font-weight: 700; }
+  /* 未取得: 点線の枠を大きくして、取り込めばよいことを目立たせる */
+  .empty-box {
+    border: 2px dashed #bab6b6; padding: 40px 24px; font-size: 13px; color: #605d5d;
+  }
+  .note { color: var(--muted); }
+
+  /* 表: 黒い見出し行、2pxの外枠、行は細い区切り線 */
+  table { border: 2px solid var(--line-strong); }
+  th, td { border: none; border-bottom: 1px solid var(--line); padding: 9px 8px; }
+  thead th {
+    background: var(--head); color: #fff; font-size: 10px; letter-spacing: .06em; border-bottom: none;
+  }
+  .num {
+    min-width: 26px; height: 26px; line-height: 26px; padding: 0; border: none;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-size: 14px; font-weight: 900;
+  }
+  .odds { font-family: 'Archivo', 'Noto Sans JP', sans-serif; font-weight: 700; }
+  .odds.miss { color: #bab6b6; }
+  .pop { font-weight: 900; color: var(--muted); }
+  table.single { max-width: none; }
+  table.single td { padding: 9px 10px; }
+  table.single td.name { font-size: 15px; font-weight: 900; }
+  table.single td.odds:nth-of-type(5) { font-size: 17px; font-weight: 900; }
+  table.single tbody tr:nth-child(even) { background: transparent; }
+  table.single tbody tr:hover { background: var(--selected); }
+  table.single tbody tr:has(input:checked), table.combos tbody tr:has(input:checked) {
+    background: var(--selected);
+  }
+  table.combos tbody tr:nth-child(even) { background: transparent; }
+  table.combos tbody tr:hover { background: var(--selected); }
+  table.single td.tick, table.combos .tick { text-align: center; }
+  .scroll { border: 2px solid var(--line-strong); }
+  .scroll table.combos { border: none; }
+  table.axis caption {
+    background: var(--head); color: #fff; border: none; font-size: 11px; padding: 4px 8px;
+  }
+
+  /* ボタン: 2pxの枠。主ボタン（追加）は緑の塗り */
+  .mini {
+    border: 2px solid var(--line-strong); background: transparent; color: var(--ink);
+    font-weight: 700; padding: 5px 12px;
+  }
+  .mini:hover { background: var(--selected); color: var(--ink); border-color: var(--line-strong); }
+  .mini.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .mini.go:hover { background: var(--accent-700); border-color: var(--accent-700); color: #fff; }
+  .mini.go[disabled]:hover { background: var(--accent); color: #fff; }
+  .modes .mini[aria-pressed="true"], .opts .mini[aria-pressed="true"],
+  .sorts .mini[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .form-wrap, .slot { border: 2px solid var(--line-strong); }
+  .slot h4 { background: var(--selected); border-bottom: 2px solid var(--line-strong); }
+  .slot label:hover { background: var(--selected); }
+  h3.section { border-left: 4px solid var(--accent); font-weight: 900; }
+  .count b { color: var(--accent-700); }
+
+  /* 買い目（右）: 見出しは Archivo の太字、まとまりごとの左の帯は券種の色のまま */
+  .slip-box { border: 2px solid var(--line-strong); }
+  .slip-box > h3 {
+    background: var(--selected); border-bottom: 2px solid var(--line-strong);
+    font: 900 18px 'Archivo', 'Noto Sans JP', sans-serif; padding: 12px 18px;
+  }
+  .slip-box > h3 .saved { font: 400 11px 'Noto Sans JP', sans-serif; }
+  .slip-empty { padding: 16px 18px; font-size: 12px; line-height: 1.8; color: #605d5d; }
+  .g { padding: 12px 18px 12px 14px; border-bottom: 1px solid var(--line); }
+  .g:has(.g-head input:checked) { background: var(--selected); }
+  .g-head .bet { padding: 2px 10px; font-weight: 900; }
+  .g-head .pts { color: var(--accent-700); }
+  .g-head .split { border: 2px solid var(--line-strong); background: transparent; color: var(--ink); }
+  .g-head .split:hover { background: var(--selected); color: var(--ink); border-color: var(--line-strong); }
+  .g-head .x { font-size: 16px; color: #9b9797; }
+  .g-money { margin-top: 12px; }
+  .g-money input {
+    width: 92px; padding: 6px 8px; font-size: 14px; border: 2px solid var(--line-strong);
+    background: #fff; font-variant-numeric: tabular-nums;
+  }
+  .g-money .sub { font-size: 15px; font-weight: 900; }
+  .g-payout { color: var(--accent-700); font-size: 11px; margin-top: 6px; }
+  .slip-foot { background: transparent; padding: 14px 18px; border-top: 1px solid var(--line); }
+  .slip-foot .refresh-all {
+    border: 2px solid var(--line-strong); color: var(--ink); background: transparent; padding: 8px 10px;
+  }
+  .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .slip-total { align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
+  .slip-total span:first-child { font-size: 14px; font-weight: 700; }
+  .slip-total .yen { font: 900 28px 'Archivo', 'Noto Sans JP', sans-serif; color: var(--accent-700); }
 </style>
 </head>
 <body>

@@ -14,93 +14,95 @@
   再実行されて辛かったのと同じことを繰り返さないため）。
 -->
 <style>
+  /* 競馬新聞のフォント（@importは<style>の先頭でないと効かない） */
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
   :root {
-    --line: #e7eae7;
-    --ink: #1b1b1b;
-    --muted: #7a817a;
+    --line: #d7d3d3;
+    --ink: #201e1d;
+    --muted: #7d7979;
+    --accent: #1a7f4b;
     /* 段の色。1色の濃淡にして「上ほど強い」が色の濃さで分かるようにする。
        馬番の枠色（赤・青・黄…）と喧嘩しないよう、盤側は緑の1系統に寄せている。 */
-    --tier-a: #0f6b3f;
-    --tier-b: #3f9c6d;
-    --tier-c: #9ccbb2;
-    --tier-d: #d3d8d3;
+    --tier-a: #0e6b3a;
+    --tier-b: #2f9b62;
+    --tier-c: #86c6a4;
+    --tier-d: #a9a7a6;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; color: var(--ink); background: #fff;
-    font-family: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'Yu Gothic', sans-serif;
+    margin: 0; color: var(--ink); background: transparent;
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
   }
   .board {
-    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-    background: #fff; box-shadow: 0 1px 2px rgba(20,40,25,.05);
+    border: 2px solid var(--ink); border-radius: 0; overflow: hidden;
+    background: transparent;
   }
   /* 段の背景は**塗らない**。全面にパステルを敷くと、主役の馬が沈む。
      段の見分けは左端の色帯だけに任せる。 */
   .lane { position: relative; border-bottom: 1px solid var(--line); }
-  .lane:last-child { border-bottom: none; }
+  .lane:last-child { border-bottom: none; background: #f8f4f4; }   /* D段（消し）だけ薄い灰色 */
   /* 左端の色帯 */
   .lane::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px;
   }
   .lane[data-tier="A"]::before { background: var(--tier-a); }
   .lane[data-tier="B"]::before { background: var(--tier-b); }
   .lane[data-tier="C"]::before { background: var(--tier-c); }
   .lane[data-tier="D"]::before { background: var(--tier-d); }
   .lane-head {
-    position: absolute; left: 4px; top: 0; bottom: 0;
-    display: flex; align-items: center; justify-content: center; padding: 0 8px;
+    position: absolute; left: 0; top: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: flex-start; padding: 0 0 0 32px;
     white-space: nowrap; pointer-events: none;
   }
   /* 段の見出しは英字だけ。段の色をそのまま文字に使って、左の色帯と対応づける。
      「軸」「相手」といった意味は、見出しのツールチップと盤の下の1行に置いてある。 */
-  .lane-key { font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: .02em; }
+  .lane-key { font: 900 38px/1 'Archivo', 'Noto Sans JP', sans-serif; letter-spacing: .02em; }
   .lane[data-tier="A"] .lane-key { color: var(--tier-a); }
   .lane[data-tier="B"] .lane-key { color: var(--tier-b); }
-  .lane[data-tier="C"] .lane-key { color: #5da684; }   /* 帯の色だと薄すぎるので文字は濃いめ */
-  .lane[data-tier="D"] .lane-key { color: #9aa09a; }
+  .lane[data-tier="C"] .lane-key { color: var(--tier-c); }
+  .lane[data-tier="D"] .lane-key { color: var(--tier-d); }
   .lane-field { position: absolute; right: 0; top: 0; bottom: 0; }
   /* 空の段。段の高さは全段そろえてあるので（下記）、空だとぽっかり空く。
      「今日はこの段に該当がいない」と伝えて、余白を情報に変える。 */
   .lane-empty {
     position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
-    text-align: center; font-size: 11px; color: #b9c0b9; letter-spacing: .08em;
+    text-align: center; font-size: 12px; color: #9b9797; letter-spacing: .08em;
   }
   /* --- 馬（主役） --- */
   .marker {
     position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center;
-    gap: 4px; padding: 2px 7px 2px 2px; border-radius: 999px; cursor: grab;
-    background: #fff; border: 1px solid #dfe4df; white-space: nowrap;
-    box-shadow: 0 1px 2px rgba(20,40,25,.10), 0 0 0 3px rgba(255,255,255,.9);
+    gap: 8px; padding: 5px 14px 5px 6px; height: 36px; border-radius: 0; cursor: grab;
+    background: #fff; border: 2px solid var(--ink); white-space: nowrap;
     touch-action: none; user-select: none;
     transition: box-shadow .12s ease, transform .12s ease;
   }
-  .marker:hover { box-shadow: 0 3px 8px rgba(20,40,25,.16), 0 0 0 3px rgba(255,255,255,.9); }
+  .marker:hover { background: #f8f4f4; }
   .marker.dragging {
-    cursor: grabbing; box-shadow: 0 6px 16px rgba(20,40,25,.24); z-index: 5;
+    cursor: grabbing; box-shadow: 0 6px 16px rgba(32,30,29,.24); z-index: 5;
   }
-  .marker.selected { outline: 2px solid #2168c3; outline-offset: 2px; }
+  .marker.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
   .marker.unknown { border-style: dashed; }
   /* 落とした馬。その場に残したまま、台紙と名前だけ落とす。
      - `.excluded` … 丸を押して消した馬（保存される）
      - `.dim`      … D段（＝消し）にいる馬。段から毎回決まるので保存しない
      この2つは**同じ見た目**にする（Dはすでに消しなので、見分ける必要がない）。
      **丸（馬番）には何も当てない**（枠色のままで、どの馬かが分かるように） */
-  .marker.excluded, .marker.dim { background: #f2f3f2; border-color: #dfe2df; box-shadow: none; }
-  .marker.excluded .name, .marker.dim .name { color: #a6aaa6; }
+  .marker.excluded, .marker.dim { background: #fff; border-color: #bab6b6; box-shadow: none; }
+  .marker.excluded .name, .marker.dim .name { color: #9b9797; }
   /* 手で動かした馬の黒い太枠は、灰色になっても残す。
      D段がほぼ全部灰色になるので、ここが負けると「どれを自分で動かしたか」が分からなくなる。
      **`.excluded` / `.dim` より後ろに置くこと**（同じ強さなら後ろが勝つ）。 */
-  .marker.manual { border-color: #1b1b1b; border-width: 2px; padding: 1px 6px 1px 1px; }
+  .marker.manual { border-color: var(--accent); border-width: 3px; padding: 4px 13px 4px 5px; }
   .dot {
-    width: 17px; height: 17px; border-radius: 50%; display: inline-flex;
-    align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
-    border: 1px solid rgba(0,0,0,.14);
+    width: 22px; height: 22px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 12px; font-weight: 900;
+    border: 2px solid var(--ink);
   }
   /* 馬名の大きさは **board.MARKER_CHAR_PX と同じ値**にすること。
      Python側はこの値で「全角1文字ぶん」を見積もって段を決めている。
      片方だけ変えると、盤が縮まないか（見積もりが大きいまま）、
      馬が重なる（見積もりが小さすぎる）。 */
-  .name { font-size: 10px; font-weight: 700; letter-spacing: .01em; cursor: pointer; }
+  .name { font-size: 14px; font-weight: 900; letter-spacing: .01em; cursor: pointer; }
   .name:hover { text-decoration: underline; }
   /* コメントの✎。**絶対位置**にしてマーカーの幅を変えない
      （幅は重なりの計算に使っているので、広げると馬が重なる）。
@@ -121,25 +123,25 @@
   }
   .axis .rail {
     flex: 1; height: 1px;
-    background: linear-gradient(90deg, #e7eae7, #c3ccc3 50%, #e7eae7);
+    background: #bab6b6;
   }
   .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
   /* 保存ボタンは無い（触るたびに自動で保存する）。代わりに状態だけ小さく出す */
   .status {
-    font-size: 11px; font-weight: 700; color: #0f6b3f; white-space: nowrap;
-    padding: 2px 8px; border-radius: 999px; background: #eaf5ee;
+    font-size: 12px; font-weight: 900; color: #fff; white-space: nowrap;
+    padding: 4px 10px; border-radius: 0; background: var(--ink);
   }
-  .status.idle { color: var(--muted); background: #f2f4f2; }
+  .status.idle { color: #fff; background: var(--ink); }
   .hint { font-size: 11px; color: var(--muted); }
   .editor {
-    margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px;
-    background: #fcfdfc; display: none;
+    margin-top: 8px; padding: 8px; border: 2px solid var(--ink); border-radius: 0;
+    background: #fff; display: none;
   }
   .editor.open { display: block; }
   .editor-head { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
   .editor-why { font-size: 11px; color: var(--muted); margin-bottom: 6px; line-height: 1.4; }
   textarea {
-    width: 100%; min-height: 62px; border: 1px solid var(--line); border-radius: 6px;
+    width: 100%; min-height: 62px; border: 2px solid var(--ink); border-radius: 0;
     padding: 6px; font-family: inherit; font-size: 12px; resize: vertical;
   }
 </style>
@@ -162,10 +164,10 @@
 </div>
 <script>
 (function () {
-  const DEFAULT_LANE_HEIGHT = 68;
+  const DEFAULT_LANE_HEIGHT = 170;
   // 見出しの列の幅。Python側（board.LANE_HEAD_PX）が唯一の出どころで、
   // 馬を置ける幅の見積もり（重なり計算）と必ず同じ値になる。
-  const DEFAULT_LANE_HEAD = 56;
+  const DEFAULT_LANE_HEAD = 110;
   // これだけ動かして初めて「ドラッグ」と見なす。丸を押すときに指が1pxぶれただけで
   // 「手で置いた」扱いになると、その馬が引き伸ばしの対象から外れて位置が固定される。
   const DRAG_THRESHOLD_PX = 4;
@@ -406,16 +408,23 @@
     if (!doc || !raceId || !marker.horse_id) return;
     const row = doc.getElementById("pg-" + raceId + "-" + marker.horse_id);
     if (!row) return;
-    // 馬柱のタブが閉じている（オッズを見ている）ときは、先にタブを開く
+    // 馬柱のタブが閉じている（予想ボードやオッズを見ている）ときは、先にタブを開く。
+    // 
+    let wait = 0;
     if (!row.offsetParent) {
       const tabs = doc.querySelectorAll('[data-testid="stTab"]');
       for (let i = 0; i < tabs.length; i++) {
-        if ((tabs[i].textContent || "").indexOf("馬柱") === 0) { tabs[i].click(); break; }
+        if ((tabs[i].textContent || "").indexOf("馬柱") === 0) { tabs[i].click(); wait = 200; break; }
       }
     }
-    row.scrollIntoView({ behavior: "smooth", block: "center" });
-    row.classList.add("pg-jumped");
-    setTimeout(function () { row.classList.remove("pg-jumped"); }, 2400);
+    function go() {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.add("pg-jumped");
+      setTimeout(function () { row.classList.remove("pg-jumped"); }, 2400);
+    }
+    go();
+    // タブを開いた直後は表がまだ見えず位置がずれるので、表示されたあとにもう一度合わせる
+    if (wait) setTimeout(function () { row.scrollIntoView({ behavior: "smooth", block: "center" }); }, wait);
   }
 
   function select(marker) {

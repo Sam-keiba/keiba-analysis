@@ -44,7 +44,7 @@ UNKNOWN_BAND = (0.25, 0.75)
 # レーン見出しの列の幅。**CSSと共通の値**で、payload でコンポーネントへ渡す。
 # 以前はCSSに直書きした104pxと、下の盤幅の見積もりが別々に置かれていて、
 # 見出しの幅を変えると重なりの計算だけ古い前提のまま取り残される作りだった。
-LANE_HEAD_PX = 56
+LANE_HEAD_PX = 110
 # 盤の外枠の見積もり。盤は全幅（.block-container は max-width 1500px）だが、
 # **狭く見ておく**。実際の盤がこれより広いぶんには馬が離れるだけで崩れないが、
 # 狭いと重なるため。手元の25レース（14頭以上）で測ると、見積もりを
@@ -52,14 +52,14 @@ LANE_HEAD_PX = 56
 # 馬が重ならないブラウザ幅が1,280px→1,150pxまで下がる。高さの代償が小さいので安全側に寄せる。
 NOMINAL_BOARD_PX = 1060
 NOMINAL_FIELD_PX = NOMINAL_BOARD_PX - LANE_HEAD_PX   # 馬を置ける幅
-MARKER_BASE_PX = 32         # 丸17px・すき間・左右の余白・枠線
-MARKER_CHAR_PX = 10         # 全角1文字ぶん（**CSSの .name の font-size と同じ値**）
+MARKER_BASE_PX = 54         # 丸22px・すき間8px・左右の余白(6+14px)・枠線(2px×2)
+MARKER_CHAR_PX = 14         # 全角1文字ぶん（**CSSの .name の font-size と同じ値**）
 
 EDGE_MARGIN = 0.003         # 端のほんの少し内側に置く（丸めの誤差で切れないように）
 MAX_LANE_ROWS = 8           # これ以上は段を増やさない（盤が縦に伸びすぎないための歯止め）
-LANE_ROW_PX = 24            # 段の間隔（マーカーの高さ21px + すき間）
+LANE_ROW_PX = 44            # 段の間隔（マーカーの高さ36px + すき間）
 LANE_PADDING_PX = 18        # レーンの上下の余白
-MIN_LANE_HEIGHT_PX = 68     # 段が少なくてもこれより低くしない（見出しの英字が収まる）
+MIN_LANE_HEIGHT_PX = 170    # 段が少なくてもこれより低くしない（デザインの段の高さ）
 
 
 def marker_width(name: str) -> float:
