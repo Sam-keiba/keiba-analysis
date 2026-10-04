@@ -111,12 +111,14 @@ def build_payload(
     entries: list[dict], odds: dict[str, list[dict]], updates: dict[str, dict],
     focus: str | None = None, slip: list[dict] | None = None,
     slip_saved_at: str | None = None, read_only: bool = False,
+    layout: str = "pc", reserve_px: int = 0,
 ) -> dict:
     """オッズのコンポーネントに渡す中身をまとめる。
 
     取り込んでいない券種もタブには出す（淡く出して「取り込めます」と伝える）。
     `focus` はいま取り込んだ券種で、コンポーネントはそのタブを開く
     （押した券種が見えないと、取り込めたのかどうか分かりにくいため）。
+    `layout="phone"` はスマホ版の見た目（下部バー＋下から開く買い目シート）。
     `slip` はDBに保存してある買い目、`slip_saved_at` はその保存時刻
     （コンポーネントが「自分が出したばかりの保存より古い中身」を見分けるのに使う）。
 
@@ -146,6 +148,10 @@ def build_payload(
         "focus": focus,
         # クラウド版では取り込みができないので、更新マーク（↻）を出さない
         "readOnly": bool(read_only),
+        # スマホ版（"phone"）は、画面の高さに合わせて中でスクロールし、下部バーと買い目シートを出す。
+        # reservePx は画面の高さのうち部品に使えない分（ヘッダー・タブバーなど）
+        "layout": layout if layout in ("pc", "phone") else "pc",
+        "reservePx": int(reserve_px),
     }
     # 買い目**以外**の符号。金額を直しただけのとき、画面を作り直さずに済ませるために使う
     # （作り直すと、入力した瞬間に買い目の枠が組み直されて上までスクロールしてしまう）

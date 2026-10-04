@@ -529,3 +529,37 @@ def test_the_payload_carries_the_race_so_the_jump_cannot_go_astray():
     payload = board.board_payload(*markers, race_id="202606040611")
     assert payload["race_id"] == "202606040611"
     assert board.board_payload(*markers)["race_id"] is None
+
+
+# --- スマホ（縦持ちで盤を90度回して出す） -------------------------------------------
+
+
+def test_the_phone_layout_uses_its_own_measurements():
+    entries = [entry("h1", name="カフジエメンタール"), entry("h2", name="ピカラ", umaban=2)]
+    scores = {"h1": score(), "h2": score()}
+    payload = board.board_payload(entries, scores, {"h1": [run()], "h2": [run()]}, layout="phone")
+    assert payload["layout"] == "phone"
+    assert payload["lane_head"] == board.PHONE.lane_head
+    assert payload["lane_height"] >= board.PHONE.min_lane_height
+    pc = board.board_payload(entries, scores, {"h1": [run()], "h2": [run()]})
+    assert pc["layout"] == "pc" and pc["lane_head"] == board.LANE_HEAD_PX   # PCは今までどおり
+    unknown = board.board_payload(entries, scores, {}, layout="tablet")
+    assert unknown["layout"] == "pc"                                      # 知らない値はPC扱い
+
+
+def test_phone_markers_do_not_overlap_on_the_phone_board():
+    """スマホの盤（狭い）でも、18頭の長い名前が重ならないこと（スマホの寸法で見積もる）。"""
+    entries = [entry(f"h{i}", name="カフジエメンタール", umaban=i) for i in range(1, 19)]
+    runs = {f"h{i}": [run(f"{i}-{i}-{i}-{i}", n_runners=18)] for i in range(1, 19)}
+    markers = board.build_markers(entries, {f"h{i}": score() for i in range(1, 19)}, runs,
+                                  metrics=board.PHONE)
+    bad = []
+    for i, a in enumerate(markers):
+        for b in markers[i + 1:]:
+            if a["tier"] != b["tier"] or a["lane_offset"] != b["lane_offset"]:
+                continue
+            need = (board.marker_width(a["horse_name"], board.PHONE)
+                    + board.marker_width(b["horse_name"], board.PHONE)) / 2
+            if abs(a["position"] - b["position"]) < need:
+                bad.append((a["horse_id"], b["horse_id"]))
+    assert bad == [] or len({m["lane_offset"] for m in markers}) == board.MAX_LANE_ROWS

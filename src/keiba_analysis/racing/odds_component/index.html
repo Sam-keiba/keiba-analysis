@@ -421,6 +421,44 @@
   .slip-total { align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
   .slip-total span:first-child { font-size: 14px; font-weight: 700; }
   .slip-total .yen { font: 900 28px 'Archivo', 'Noto Sans JP', sans-serif; color: var(--accent-700); }
+  /* --- スマホ（payload.layout = "phone"。docs/design_handoff の Mobile 版） -------------
+     部品の高さを「画面の高さ − ヘッダー・タブバー」に固定して、中でスクロールさせる。
+     下部バー（買い目 N点 ↑）と、下から開く買い目シートは部品の中の fixed で出す。 */
+  body.phone { height: 100vh; overflow-y: auto; overflow-x: hidden; padding-bottom: 76px; }
+  body.phone .wrap { display: block; }
+  body.phone .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  body.phone .tab { flex: 0 0 auto; height: 44px; }
+  body.phone table.single { font-size: 12px; }
+  body.phone table.single td, body.phone table.single th { padding: 6px 4px; }
+  body.phone table.single td { height: 44px; }
+  body.phone table.single td.name { font-size: 13px; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body.phone .mini, body.phone .refresh { min-height: 44px; }
+  body.phone .acts-line { position: sticky; bottom: 64px; background: #f3f2f2; padding: 6px 0; z-index: 5; }
+  body.phone .slip {
+    position: fixed; left: 0; right: 0; bottom: 0; max-width: none; max-height: 85vh;
+    overflow-y: auto; background: #fff; z-index: 30; border-top: 2px solid var(--line-strong);
+    transform: translateY(105%); transition: transform .2s ease-out;
+  }
+  body.phone.sheet-open .slip { transform: none; }
+  body.phone .slip-box { border: none; }
+  body.phone .slip-list { max-height: none; }
+  body.phone .sheet-close { display: inline-flex; }
+  .sheet-close {
+    display: none; appearance: none; align-items: center; min-height: 44px; padding: 0 14px;
+    border: 2px solid var(--line-strong); background: transparent; font: inherit; font-weight: 700;
+  }
+  #phone-bar {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 20;
+    background: var(--ink); color: #fff; align-items: center; justify-content: space-between;
+    padding: 0 14px; font-weight: 900;
+  }
+  body.phone #phone-bar { display: flex; }
+  #phone-bar button {
+    appearance: none; min-height: 44px; padding: 0 16px; border: 2px solid #fff;
+    background: transparent; color: #fff; font: inherit; font-weight: 900;
+  }
+  #sheet-backdrop { display: none; position: fixed; inset: 0; background: rgba(32,30,29,.4); z-index: 25; }
+  body.phone.sheet-open #sheet-backdrop { display: block; }
 </style>
 </head>
 <body>
@@ -459,6 +497,7 @@
   let appliedVersion = null;         // いま描いてある中身の符号（同じなら描き直さない）
   let appliedDraw = null;            // そのうち**買い目を除いた**ぶんの符号
   let lastHeight = null;             // 最後にStreamlitへ伝えた高さ
+  let phone = false;                 // スマホ版（payload.layout = "phone"）
   let waitingFetch = false;          // 更新マークを押して取り込みを待っている
   let slip = [];                     // 買い目（まとまりの配列）
   let nextGroup = 1;                 // まとまりの番号（画面の中だけの通し番号）
@@ -512,10 +551,36 @@
     return last == null || Math.abs(next - last) >= 2;
   }
   function setHeight() {
-    const height = document.documentElement.scrollHeight + 8;
+    // スマホは画面の高さに固定して中でスクロールさせる（下部バーとシートを部品の中に出すため）
+    const height = phone ? phoneFrameHeight() : document.documentElement.scrollHeight + 8;
     if (!heightChanged(height, lastHeight)) return;
     lastHeight = height;
     send("streamlit:setFrameHeight", { height: height });
+  }
+
+  /** スマホで部品に使える高さ（画面の高さ − ヘッダー・タブバーなど）。 */
+  function phoneFrameHeight() {
+    let total = 700;
+    try { total = window.parent.innerHeight || total; } catch (e) { /* 親が読めなければ控えの値 */ }
+    return Math.max(360, total - (payload.reservePx || 0));
+  }
+
+  /** body の目印を付け外しする（テスト用の最小のDOMには body が無いので確かめてから）。 */
+  function bodyClass(name, on) {
+    const body = document.body;
+    if (body && body.classList && body.classList.toggle) body.classList.toggle(name, !!on);
+  }
+
+  /** スマホの下部バー（買い目 N点 ↑）と、シートの後ろの暗幕を1回だけ作る。 */
+  function ensurePhoneBar() {
+    if (!phone || document.getElementById("phone-bar") || !document.body) return;
+    const backdrop = el("div", { id: "sheet-backdrop" });
+    backdrop.addEventListener("click", function () { bodyClass("sheet-open", false); });
+    const open = el("button", { type: "button", id: "phone-bar-open", text: "買い目 0点 ↑" });
+    open.addEventListener("click", function () { bodyClass("sheet-open", true); });
+    const bar = el("div", { id: "phone-bar" }, [el("span", { id: "phone-bar-total", text: "0円" }), open]);
+    document.body.appendChild(backdrop);
+    document.body.appendChild(bar);
   }
 
   function bet(key) {
@@ -973,10 +1038,14 @@
     foot.appendChild(bulk);
     foot.appendChild(totals);
 
+    // スマホの買い目シートを閉じる（PCでは出さない）
+    const close = el("button", { class: "sheet-close", type: "button", text: "閉じる ↓" });
+    close.addEventListener("click", function () { bodyClass("sheet-open", false); });
     box.appendChild(el("div", { class: "slip-box" }, [
       el("h3", {}, [
         el("span", { text: "買い目" }),
         el("span", { class: "saved", text: slip.length ? "自動で保存されます" : "" }),
+        close,
       ]),
       list, foot,
     ]));
@@ -992,6 +1061,11 @@
     box.appendChild(el("span", { text: "合計" }));
     box.appendChild(el("span", { text: totals.points + "点" }));
     box.appendChild(el("span", { class: "yen", text: yenText(totals.yen) }));
+    // スマホの下部バーにも同じ合計を出す
+    const open = document.getElementById("phone-bar-open");
+    if (open) open.textContent = "買い目 " + totals.points + "点 ↑";
+    const total = document.getElementById("phone-bar-total");
+    if (total) total.textContent = yenText(totals.yen);
   }
 
   // --- 券種のタブ ---------------------------------------------------------------
@@ -1635,10 +1709,13 @@
     }
     appliedVersion = next.version || null;
     waitingFetch = false;
+    phone = next.layout === "phone";
+    bodyClass("phone", phone);
     // 買い目**以外**が前と同じか（金額を直しただけならここは変わらない）
     const sameDraw = !!next.drawVersion && next.drawVersion === appliedDraw;
     appliedDraw = next.drawVersion || null;
     payload = next;
+    ensurePhoneBar();               // スマホの下部バー（1回だけ作る）
     // **自分が保存した買い目が返ってきただけ**なら、何も描き直さない。
     // 描き直すと、金額を直した瞬間に買い目の枠が組み直されて上まで戻ってしまう。
     if (sameDraw && slipSignature(next.slip) === slipSignature(slip)) return;

@@ -144,6 +144,26 @@
     width: 100%; min-height: 62px; border: 2px solid var(--ink); border-radius: 0;
     padding: 6px; font-family: inherit; font-size: 12px; resize: vertical;
   }
+  /* --- スマホ（payload.layout = "phone"。board.PHONE の寸法と対で直すこと） --------------
+     マーカーは高さ28px・馬番は四角22px・馬名12px。縦持ちでは盤を90度回して横長に出す
+     （iPhoneのSafariは画面の向きを固定できないため）。 */
+  #root { position: relative; }
+  body.phone .lane-head { padding: 0 0 0 14px; }
+  body.phone .lane-key { font-size: 22px; }
+  body.phone .marker {
+    gap: 6px; padding: 2px 8px 2px 3px; height: 28px; border-width: 2px;
+  }
+  body.phone .marker.manual { border-width: 3px; padding: 1px 7px 1px 2px; }
+  body.phone .dot { width: 22px; height: 22px; border-radius: 0; border-width: 1px; font-size: 11px; }
+  body.phone .name { font-size: 12px; }
+  body.phone .pen { display: none; }           /* 指では✎が押しにくいので、コメントはPCで書く */
+  body.phone .hint { display: none; }
+  body.phone .axis { margin-bottom: 4px; font-size: 10px; }
+  body.phone .toolbar { margin-top: 6px; }
+  body.phone.rotated { overflow: hidden; }
+  body.phone.rotated #root {
+    position: absolute; top: 0; left: 0; transform-origin: top left;
+  }
 </style>
 </head>
 <body>
@@ -182,12 +202,85 @@
   const COMMENT_DELAY_MS = 600;
   let appliedVersion = null;   // 最後に描いた中身の符号（同じなら描き直さない）
   let appliedRev = -1;         // 最後に描いたときの番号（これ以下の描画は古いので捨てる）
+  // スマホ（payload.layout = "phone"）。縦持ちのときは盤を90度回して横長に出す
+  let phone = false;
+  let rotated = false;
+  let rotateScale = 1;          // 回した盤が画面の幅に収まらないときに縮める倍率
+  let reservePx = 0;            // 画面の高さのうち、盤に使えない分（ヘッダー・タブバー等）
 
   function send(type, data) {
     window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, data), "*");
   }
   function setHeight() {
+    if (rotated) {
+      send("streamlit:setFrameHeight", { height: frameHeight() });
+      return;
+    }
     send("streamlit:setFrameHeight", { height: document.getElementById("root").scrollHeight + 8 });
+  }
+
+  /** body の目印を付け外しする（テスト用の最小のDOMには body が無いので確かめてから）。 */
+  function bodyClass(name, on) {
+    const body = document.body;
+    if (body && body.classList && body.classList.toggle) body.classList.toggle(name, !!on);
+  }
+
+  /** スマホで盤に使える高さ（画面の高さ − ヘッダー・タブバーなど）。 */
+  function frameHeight() {
+    let total = 640;
+    try { total = window.parent.innerHeight || total; } catch (e) { /* 親が読めないときは控えの値 */ }
+    return Math.max(320, total - reservePx);
+  }
+
+  /** 縦持ちか（親の画面で見る。iframeの中の幅は盤の幅なので当てにならない）。 */
+  function isPortrait() {
+    try { return window.parent.innerHeight > window.parent.innerWidth; } catch (e) { return false; }
+  }
+
+  /**
+   * スマホの縦持ちでは、盤（#root）を90度回して横長に出す。
+   * 回したあとの「縦」は画面の高さ、「横」は画面の幅（iframeの幅）に収める。
+   */
+  function applyRotation() {
+    const root = document.getElementById("root");
+    rotated = phone && isPortrait();
+    bodyClass("rotated", rotated);
+    if (!rotated) {
+      root.style.width = "";
+      root.style.transform = "";
+      rotateScale = 1;
+      return;
+    }
+    const height = frameHeight();               // 回したあとの縦＝盤の横幅
+    const width = window.innerWidth || 360;     // 回したあとの横＝盤の高さ
+    root.style.width = height + "px";
+    const content = root.scrollHeight || width;
+    rotateScale = Math.min(1, width / content);
+    root.style.width = (height / rotateScale) + "px";
+    root.style.transform = "translateX(" + width + "px) rotate(90deg) scale(" + rotateScale + ")";
+  }
+
+  /**
+   * 押した位置を、要素 `el` の中の（回す前の）座標に直す。`{x, y, w, h}`。
+   * 回していないときは getBoundingClientRect そのまま（今までと同じ計算）。
+   * 回しているときは、画面の座標を回転と縮小の逆で戻し、盤の中の位置（offset）と比べる。
+   */
+  function pointIn(event, el) {
+    if (!rotated) {
+      const r = el.getBoundingClientRect();
+      return { x: event.clientX - r.left, y: event.clientY - r.top, w: r.width, h: r.height };
+    }
+    const root = document.getElementById("root");
+    const width = window.innerWidth || 360;
+    const u = event.clientY / rotateScale;               // 回す前の横（盤の左から）
+    const v = (width - event.clientX) / rotateScale;     // 回す前の縦（盤の上から）
+    let left = 0, top = 0, node = el;
+    while (node && node !== root) {
+      left += (node.offsetLeft || 0) + (node.clientLeft || 0);
+      top += (node.offsetTop || 0) + (node.clientTop || 0);
+      node = node.offsetParent;
+    }
+    return { x: u - left, y: v - top, w: el.offsetWidth, h: el.offsetHeight };
   }
   function setStatus(text, idle) {
     const el = document.getElementById("status");
@@ -249,6 +342,8 @@
       el.querySelector(".lane-field").style.left = laneHead + "px";
       board.appendChild(el);
     });
+    // スマホの縦持ちは、馬を置く前に盤を回して横幅を決める（馬の位置は盤の幅で測るため）
+    applyRotation();
     markers.forEach(drawMarker);
     // 段の高さは全段そろえている（ドラッグの当たり判定が割り算1つで済むうえ、
     // 空の段に馬を落としたときに段が伸びて他の馬が縦にずれるのを防げる）。
@@ -349,15 +444,15 @@
         moved = true;
         el.classList.add("dragging");
       }
-      const board = document.getElementById("board").getBoundingClientRect();
-      const field = el.parentElement.getBoundingClientRect();
-      const x = Math.min(1, Math.max(0, (moveEvent.clientX - field.left) / field.width));
+      // 盤の中の位置（スマホの縦持ちで盤を回しているときは、回転を戻して測る）
+      const onBoard = pointIn(moveEvent, document.getElementById("board"));
+      const onField = pointIn(moveEvent, el.parentElement);
+      const x = Math.min(1, Math.max(0, onField.x / onField.w));
       // 縦はレーンをまたいで動かせる（Tierを変える操作そのもの）
       const index = Math.min(lanes.length - 1, Math.max(0,
-        Math.floor((moveEvent.clientY - board.top) / laneHeight)));
+        Math.floor(onBoard.y / laneHeight)));
       const tier = lanes[index].key;
-      const laneTop = board.top + index * laneHeight;
-      const offset = Math.min(0.92, Math.max(0.08, (moveEvent.clientY - laneTop) / laneHeight));
+      const offset = Math.min(0.92, Math.max(0.08, (onBoard.y - index * laneHeight) / laneHeight));
       marker.position = Math.round(x * 1000) / 1000;
       marker.lane_offset = Math.round(offset * 1000) / 1000;
       if (tier !== marker.tier) {
@@ -479,11 +574,21 @@
     laneHeight = payload.lane_height || DEFAULT_LANE_HEIGHT;
     laneHead = payload.lane_head || DEFAULT_LANE_HEAD;
     lanes = payload.lanes || [];
+    phone = payload.layout === "phone";
+    reservePx = payload.reserve_px || 0;
+    bodyClass("phone", phone);
     markers = (payload.markers || []).map(function (m) { return Object.assign({}, m); });
     document.getElementById("axis-left").textContent = "← " + ((payload.axis || {}).left || "");
     document.getElementById("axis-right").textContent = ((payload.axis || {}).right || "") + " →";
     draw();
   });
+
+  // 画面の向きを変えたら（縦持ち⇔横持ち）、回すかどうかを決め直して描き直す
+  try {
+    window.parent.addEventListener("resize", function () {
+      if (phone && lanes.length) draw();
+    });
+  } catch (e) { /* 親が読めない環境では向きの変化に追いつかないだけ */ }
 
   send("streamlit:componentReady", { apiVersion: 1 });
   setHeight();

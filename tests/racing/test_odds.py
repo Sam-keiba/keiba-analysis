@@ -252,3 +252,21 @@ def test_the_draw_version_follows_the_odds():
     assert odds.build_payload(ENTRIES, moved, UPDATES)["drawVersion"] != base
     later = {**UPDATES, "umaren": {"odds_label": "12時41分現在オッズ"}}
     assert odds.build_payload(ENTRIES, ODDS, later)["drawVersion"] != base
+
+
+def test_the_phone_layout_is_passed_to_the_component():
+    """スマホ版は下部バーと買い目シートで出す（PCは今までどおり）。"""
+    pc = odds.build_payload(ENTRIES, ODDS, UPDATES)
+    assert pc["layout"] == "pc" and pc["reservePx"] == 0
+    phone = odds.build_payload(ENTRIES, ODDS, UPDATES, layout="phone", reserve_px=180)
+    assert phone["layout"] == "phone" and phone["reservePx"] == 180
+    assert phone["drawVersion"] != pc["drawVersion"]          # 見た目が変わるので描き直す
+    assert odds.build_payload(ENTRIES, ODDS, UPDATES, layout="tablet")["layout"] == "pc"
+
+
+def test_the_phone_bar_and_sheet_exist_in_the_component():
+    import pathlib
+
+    source = (pathlib.Path(odds.__file__).parent / "odds_component" / "index.html").read_text()
+    assert 'id: "phone-bar"' in source and "sheet-open" in source
+    assert "phoneFrameHeight()" in source.split("function setHeight()")[1].split("}")[0]

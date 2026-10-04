@@ -553,3 +553,42 @@ var answer = { gridTabClicked: !!tab.clicked, oddsTabClicked: !!odds.clicked,
                jumped: !!row.scrolledIntoView };
 """, tmp_path)
     assert answer == {"gridTabClicked": True, "oddsTabClicked": False, "jumped": True}
+
+
+# --- スマホ（payload.layout = "phone"） ----------------------------------------------
+
+
+@needs_jsc
+def test_the_phone_board_still_drags_and_saves(script, tmp_path):
+    """スマホの寸法でも、回していないとき（横持ち・親が読めない）は今までどおり動かして保存できる。"""
+    payload = {**_payload(), "layout": "phone", "reserve_px": 180}
+    answer = run_board(script, OPEN_BOARD + """
+drag(keito);
+var answer = { sent: SENT.length,
+               manual: SENT[0].markers.filter(function (m) { return m.is_manual; }).length };
+""", tmp_path, payload=payload)
+    assert answer == {"sent": 1, "manual": 1}
+
+
+def test_the_phone_board_turns_the_pointer_back_when_rotated(script: str):
+    """縦持ちで盤を90度回しているときは、押した位置を回転の逆で戻してから測る。"""
+    move = script.split("function onMove(moveEvent)")[1].split("function onUp()")[0]
+    assert "pointIn(moveEvent" in move                    # ドラッグの位置はこの1か所で測る
+    point = script.split("function pointIn(event, el)")[1].split("\n  }\n")[0]
+    assert "if (!rotated)" in point and "getBoundingClientRect" in point   # 回していなければ今までどおり
+    assert "rotateScale" in point                         # 縮めているぶんも戻す
+
+
+def test_the_phone_sizes_match_the_python_estimate(source: str):
+    """スマホのマーカーの寸法が、board.PHONE の見積もりに収まること（PCと同じ考え方）。"""
+    import re
+
+    from keiba_analysis.racing import board
+
+    name = re.search(r"body\.phone \.name \{\s*font-size:\s*([\d.]+)px", source)
+    assert name and float(name.group(1)) == board.PHONE.marker_char
+    dot = re.search(r"body\.phone \.dot \{\s*width:\s*([\d.]+)px", source)
+    rule = re.search(r"body\.phone \.marker \{([^}]*)\}", source).group(1)
+    gap = float(re.search(r"gap:\s*([\d.]+)px", rule).group(1))
+    pad = [float(x.rstrip("px")) for x in re.search(r"padding:\s*([^;]+);", rule).group(1).split()]
+    assert float(dot.group(1)) + gap + pad[1] + pad[3] + 4 <= board.PHONE.marker_base   # 枠線2px×2

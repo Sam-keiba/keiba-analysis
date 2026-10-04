@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 
 from keiba_analysis.racing import tier as tier_module
 from keiba_analysis.racing.running_style import SAMPLE_LIMIT, classify_run, normalized_position
@@ -62,9 +63,41 @@ LANE_PADDING_PX = 18        # レーンの上下の余白
 MIN_LANE_HEIGHT_PX = 170    # 段が少なくてもこれより低くしない（デザインの段の高さ）
 
 
-def marker_width(name: str) -> float:
+@dataclass(frozen=True)
+class Metrics:
+    """盤の寸法の見積もり一式（PCとスマホで別）。**CSSの寸法と対で直すこと**。"""
+
+    lane_head: int          # レーン見出しの列の幅
+    nominal_board: int      # 盤の幅の見積もり（狭めに見る）
+    marker_base: int        # マーカーの、馬名以外のぶんの幅
+    marker_char: int        # 全角1文字ぶん（CSSの馬名の font-size）
+    lane_row: int           # 段の間隔
+    lane_padding: int       # レーンの上下の余白
+    min_lane_height: int    # レーンの最低の高さ
+
+    @property
+    def field(self) -> int:
+        return self.nominal_board - self.lane_head
+
+
+PC = Metrics(
+    lane_head=LANE_HEAD_PX, nominal_board=NOMINAL_BOARD_PX, marker_base=MARKER_BASE_PX,
+    marker_char=MARKER_CHAR_PX, lane_row=LANE_ROW_PX, lane_padding=LANE_PADDING_PX,
+    min_lane_height=MIN_LANE_HEIGHT_PX,
+)
+# スマホ（iPhone縦持ちで盤を90度回して横長に出す）。盤の幅＝画面の高さからヘッダーと
+# タブバーを引いたぶんで、小さいiPhoneでも560px前後は取れる。マーカーは高さ28px、
+# 馬番の四角22px・すき間6px・左右の余白(3+8px)・枠線(2px×2)・馬名12px。
+PHONE = Metrics(
+    lane_head=44, nominal_board=560, marker_base=44, marker_char=12,
+    lane_row=32, lane_padding=8, min_lane_height=76,
+)
+LAYOUTS = {"pc": PC, "phone": PHONE}
+
+
+def marker_width(name: str, metrics: Metrics = PC) -> float:
     """マーカーの幅を盤の横幅に対する割合で見積もる。"""
-    return (MARKER_BASE_PX + MARKER_CHAR_PX * len(name)) / NOMINAL_FIELD_PX
+    return (metrics.marker_base + metrics.marker_char * len(name)) / metrics.field
 
 
 def horizontal_position(runs: list[dict]) -> float | None:
@@ -102,7 +135,7 @@ def _row_order(count: int) -> list[int]:
     return sorted(range(count), key=lambda row: (abs(row - middle), row))
 
 
-def _assign_rows(markers: list[dict], rows: int, force: bool = False) -> bool:
+def _assign_rows(markers: list[dict], rows: int, force: bool = False, metrics: Metrics = PC) -> bool:
     """横が近い馬を別の段へ送る。全頭を `rows` 段に収められたら True。
 
     マーカーは中央ぞろえなので、隣り合う2頭は**幅の半分ずつ**離れていないと重なる。
@@ -110,7 +143,7 @@ def _assign_rows(markers: list[dict], rows: int, force: bool = False) -> bool:
     placed: list[list[tuple[float, float]]] = [[] for _ in range(rows)]
     order = _row_order(rows)
     for marker in sorted(markers, key=lambda m: m["position"]):
-        width = marker_width(marker["horse_name"])
+        width = marker_width(marker["horse_name"], metrics)
         for row in order:
             if all(
                 abs(marker["position"] - x) >= (width + other) / 2
@@ -130,7 +163,7 @@ def _assign_rows(markers: list[dict], rows: int, force: bool = False) -> bool:
     return True
 
 
-def _spread(markers: list[dict]) -> int:
+def _spread(markers: list[dict], metrics: Metrics = PC) -> int:
     """同じレーンの馬を段に振り分ける。使った段数を返す。
 
     段を増やすとレーンが高くなるので、**収まる中でいちばん少ない段数**を選ぶ。
@@ -140,7 +173,7 @@ def _spread(markers: list[dict]) -> int:
     if markers:
         limit = min(MAX_LANE_ROWS, len(markers))
         for used in range(1, limit + 1):
-            if _assign_rows(markers, used, force=used == limit):
+            if _assign_rows(markers, used, force=used == limit, metrics=metrics):
                 break
         for marker in markers:
             # 段の番号を、レーンの中の高さ（0〜1）に直す。段が1つなら真ん中。
@@ -155,6 +188,7 @@ def build_markers(
     scores: dict[str, "tier_module.TierScore"],
     past_runs: dict[str, list[dict]],
     saved: dict[str, dict] | None = None,
+    metrics: Metrics = PC,
 ) -> list[dict]:
     """盤に置く馬の一覧。
 
@@ -196,10 +230,10 @@ def build_markers(
 
     # --- ここまでが自動配置。手を入れた情報はいっさい混ぜない ---
     _spread_unknown(markers)
-    stretch_positions(markers)
+    stretch_positions(markers, metrics)
     # 段の割り振りは**広げたあとの位置**で決める（広がるぶん段は少なくて済む）
     for key, *_ in LANES:
-        _spread([m for m in markers if m["tier"] == key])
+        _spread([m for m in markers if m["tier"] == key], metrics)
 
     # --- 手を入れた馬だけを上書きする ---
     for marker in markers:
@@ -216,7 +250,7 @@ def build_markers(
     return markers
 
 
-def stretch_positions(markers: list[dict]) -> None:
+def stretch_positions(markers: list[dict], metrics: Metrics = PC) -> None:
     """通過順位のある馬を、そのレースの中で両端まで広げる（その場で書き換える）。
 
     横位置のもとは「通過順位の平均」で、どの馬も中団あたりに寄るため、
@@ -242,8 +276,8 @@ def stretch_positions(markers: list[dict]) -> None:
     if span <= 0:
         return                      # 全馬が同じ位置（割り算できない）
 
-    low = marker_width(lowest["horse_name"]) / 2 + EDGE_MARGIN
-    high = 1.0 - marker_width(highest["horse_name"]) / 2 - EDGE_MARGIN
+    low = marker_width(lowest["horse_name"], metrics) / 2 + EDGE_MARGIN
+    high = 1.0 - marker_width(highest["horse_name"], metrics) / 2 - EDGE_MARGIN
     if low >= high:
         return                      # 名前が長すぎて広げる余地がない
 
@@ -271,14 +305,14 @@ def _spread_unknown(markers: list[dict]) -> None:
         marker["position"] = round(low + step * i, 4)
 
 
-def lane_height(markers: list[dict]) -> int:
+def lane_height(markers: list[dict], metrics: Metrics = PC) -> int:
     """レーン1つぶんの高さ（px）。段をいちばん多く使うレーンに合わせる。
 
     高さを全レーン共通にしておくと、コンポーネント側のドラッグの当たり判定
     （何段目のレーンに落としたか）が割り算1つで済む。
     """
     rows = max((m.get("lane_rows", 1) for m in markers), default=1)
-    return max(MIN_LANE_HEIGHT_PX, rows * LANE_ROW_PX + LANE_PADDING_PX)
+    return max(metrics.min_lane_height, rows * metrics.lane_row + metrics.lane_padding)
 
 
 def markers_version(markers: list[dict]) -> str:
@@ -303,6 +337,7 @@ def board_payload(
     saved: dict[str, dict] | None = None,
     rev: int = 0,
     race_id: str | None = None,
+    layout: str = "pc",
 ) -> dict:
     """コンポーネントに渡すデータ一式。
 
@@ -311,9 +346,13 @@ def board_payload(
     `rev` は**描くたびに増える番号**。保存のときはPythonが2回走り、1回目は
     「保存前」の内容を渡してしまうので、それが**あとから届いた**ときに
     巻き戻らないよう、コンポーネント側で古い番号の描画を捨てるのに使う。
+    `layout` は `"pc"` か `"phone"`。寸法の見積もり（`Metrics`）と、コンポーネントの
+    見た目（スマホは小さいマーカー・縦持ちでは90度回して横長に出す）が変わる。
     """
-    markers = build_markers(entries, scores, past_runs, saved)
+    metrics = LAYOUTS.get(layout, PC)
+    markers = build_markers(entries, scores, past_runs, saved, metrics)
     return {
+        "layout": layout if layout in LAYOUTS else "pc",
         # 馬名から馬柱へ飛ぶときに使う。**このレースの行しか探さない**ための目印
         "race_id": race_id,
         "lanes": [{"key": k, "label": label, "meaning": meaning} for k, label, meaning in LANES],
@@ -321,8 +360,8 @@ def board_payload(
         "markers": markers,
         # 見出しの列の幅はここが唯一の出どころ（CSSに直書きしない）。
         # 馬を置ける幅の見積もり（NOMINAL_FIELD_PX）と必ず同じ前提になる。
-        "lane_head": LANE_HEAD_PX,
-        "lane_height": lane_height(markers),
+        "lane_head": metrics.lane_head,
+        "lane_height": lane_height(markers, metrics),
         "version": markers_version(markers),
         "rev": rev,
     }
