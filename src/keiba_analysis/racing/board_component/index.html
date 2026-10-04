@@ -164,6 +164,8 @@
   body.phone.rotated #root {
     position: absolute; top: 0; left: 0; transform-origin: top left;
   }
+  /* 馬柱の枠から飛んできた馬（2.4秒だけ光らせる。馬名→馬柱の pg-jumped と同じ長さ） */
+  .marker.flash { outline: 3px solid var(--accent); outline-offset: 3px; z-index: 6; }
 </style>
 </head>
 <body>
@@ -522,6 +524,53 @@
     if (wait) setTimeout(function () { row.scrollIntoView({ behavior: "smooth", block: "center" }); }, wait);
   }
 
+  /**
+   * 馬柱の**枠**（`.board-link`）を押したら、予想ボードのタブを開いてその馬を光らせる
+   * （馬名→馬柱 `jumpToGrid` の逆向き）。押された場所は親の画面なので、親に1つだけ受け口を付ける。
+   * 盤を描き直すたびに呼ばれるので、前に付けた受け口は外してから付け直す。
+   *
+   * `data-race` が盤のレースIDと違うときは何もしない（別のレースの馬を光らせない）。
+   */
+  function installBoardLinks() {
+    let win, doc;
+    try { win = window.parent; doc = win && win.document; } catch (e) { return; }
+    if (!doc || !doc.addEventListener) return;
+    if (win.__keibaBoardLink && doc.removeEventListener) {
+      doc.removeEventListener("click", win.__keibaBoardLink, true);
+    }
+    win.__keibaBoardLink = function (event) {
+      const target = event.target;
+      const link = target && target.closest ? target.closest(".board-link") : null;
+      if (!link) return;
+      const data = link.dataset || {};
+      if (!raceId || data.race !== raceId) return;
+      const marker = markers.filter(function (m) { return m.horse_id === data.horse; })[0];
+      if (!marker || !marker.el) return;
+      if (event.preventDefault) event.preventDefault();
+      // 予想ボードのタブが閉じていれば開く（PCは「予想ボード」、スマホは「ボード」）
+      let wait = 0;
+      const tabs = doc.querySelectorAll('[data-testid="stTab"]');
+      for (let i = 0; i < tabs.length; i++) {
+        const label = tabs[i].textContent || "";
+        if (label.indexOf("予想ボード") === 0 || label === "ボード") {
+          const open = tabs[i].getAttribute && tabs[i].getAttribute("aria-selected") === "true";
+          if (!open) {
+            tabs[i].click();
+            wait = 200;
+          }
+          break;
+        }
+      }
+      setTimeout(function () {
+        const frame = window.frameElement;
+        if (frame && frame.scrollIntoView) frame.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, wait);
+      marker.el.classList.add("flash");
+      setTimeout(function () { marker.el.classList.remove("flash"); }, 2400);
+    };
+    doc.addEventListener("click", win.__keibaBoardLink, true);
+  }
+
   function select(marker) {
     selected = marker;
     markers.forEach(function (m) { if (m.el) m.el.classList.remove("selected"); });
@@ -553,6 +602,7 @@
     const args = event.data.args || {};
     const payload = args.payload || {};
     raceId = payload.race_id || raceId;
+    installBoardLinks();         // 馬柱の枠 → この盤の馬（レースIDが分かってから付ける）
     // **自分の保存が返ってきただけ**なら、盤は画面にもう出ているので描き直さない。
     // 描き直すとコメント欄が閉じたり、書きかけが消えたりする。
     // （このとき届く中身は保存**前**のものでもあるので、なおさら当ててはいけない）

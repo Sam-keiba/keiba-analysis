@@ -592,3 +592,48 @@ def test_the_phone_sizes_match_the_python_estimate(source: str):
     gap = float(re.search(r"gap:\s*([\d.]+)px", rule).group(1))
     pad = [float(x.rstrip("px")) for x in re.search(r"padding:\s*([^;]+);", rule).group(1).split()]
     assert float(dot.group(1)) + gap + pad[1] + pad[3] + 4 <= board.PHONE.marker_base   # 枠線2px×2
+
+
+# --- 馬柱の枠 → 予想ボードのその馬 -------------------------------------------------
+
+BOARD_LINK = """
+var parentClick = null;
+parentDocument.addEventListener = function (type, fn) { if (type === "click") parentClick = fn; };
+parentDocument.removeEventListener = function () {};
+var tab = putInParent("tab-board", new Node("button"));
+tab.attrs["data-testid"] = "stTab";
+tab.textContent = "予想ボード";
+function linkTo(race, horse) {
+  var link = new Node("span");
+  link.attrs["class"] = "board-link";
+  link.dataset = { race: race, horse: horse };
+  return link;
+}
+render(PAYLOAD);
+var keito = markerOf("キャントウェイト");
+"""
+
+
+@needs_jsc
+def test_the_waku_opens_the_board_and_lights_the_horse(script, tmp_path):
+    """馬柱の枠を押すと、予想ボードのタブを開いて、その馬を光らせる。"""
+    answer = run_board(script, BOARD_LINK + """
+var link = linkTo("202606040611", "2021102800");
+parentClick({ target: link, preventDefault: function () {} });
+var answer = { tab: !!tab.clicked,
+               flash: (keito.attrs["class"] || "").indexOf("flash") >= 0 };
+runTimers();
+answer.after = (keito.attrs["class"] || "").indexOf("flash") >= 0;
+""", tmp_path)
+    assert answer == {"tab": True, "flash": True, "after": False}
+
+
+@needs_jsc
+def test_the_waku_of_another_race_does_nothing(script, tmp_path):
+    """別のレースの馬柱の枠では、この盤の馬を光らせない（取り違え防止）。"""
+    answer = run_board(script, BOARD_LINK + """
+parentClick({ target: linkTo("202606040612", "2021102800"), preventDefault: function () {} });
+var answer = { tab: !!tab.clicked,
+               flash: (keito.attrs["class"] || "").indexOf("flash") >= 0 };
+""", tmp_path)
+    assert answer == {"tab": False, "flash": False}
