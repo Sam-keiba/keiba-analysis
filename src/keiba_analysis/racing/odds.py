@@ -71,6 +71,8 @@ def horses(entries: list[dict], tansho: dict[str, list]) -> list[dict]:
         background, ink = waku_color(entry.get("waku"))
         out.append({
             "number": int(umaban), "waku": entry.get("waku"),
+            # 馬名から馬柱のその馬の行へ飛ぶのに使う（行のidは pg-<レースID>-<馬ID>）
+            "horse_id": entry.get("horse_id"),
             "bg": background, "fg": ink,
             "name": entry.get("horse_name") or "",
             "odds": win.get(combo),
@@ -111,7 +113,7 @@ def build_payload(
     entries: list[dict], odds: dict[str, list[dict]], updates: dict[str, dict],
     focus: str | None = None, slip: list[dict] | None = None,
     slip_saved_at: str | None = None, read_only: bool = False,
-    layout: str = "pc", reserve_px: int = 0,
+    layout: str = "pc", reserve_px: int = 0, race_id: str | None = None,
 ) -> dict:
     """オッズのコンポーネントに渡す中身をまとめる。
 
@@ -148,6 +150,8 @@ def build_payload(
         "focus": focus,
         # クラウド版では取り込みができないので、更新マーク（↻）を出さない
         "readOnly": bool(read_only),
+        # 馬名から馬柱へ飛ぶときに使う。**このレースの行しか探さない**ための目印
+        "raceId": race_id,
         # スマホ版（"phone"）は、画面の高さに合わせて中でスクロールし、下部バーと買い目シートを出す。
         # reservePx は画面の高さのうち部品に使えない分（ヘッダー・タブバーなど）
         "layout": layout if layout in ("pc", "phone") else "pc",

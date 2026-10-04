@@ -270,3 +270,10 @@ def test_the_phone_bar_and_sheet_exist_in_the_component():
     source = (pathlib.Path(odds.__file__).parent / "odds_component" / "index.html").read_text()
     assert 'id: "phone-bar"' in source and "sheet-open" in source
     assert "phoneFrameHeight()" in source.split("function setHeight()")[1].split("}")[0]
+
+
+def test_the_payload_carries_the_ids_for_jumping_to_the_grid():
+    entries = [{**e, "horse_id": f"H{i}"} for i, e in enumerate(ENTRIES)]
+    payload = odds.build_payload(entries, ODDS, UPDATES, race_id="202606040611")
+    assert payload["raceId"] == "202606040611"
+    assert all(h["horse_id"] for h in payload["horses"])

@@ -1351,3 +1351,40 @@ var answer = { buttons: NODES.slip.findAll(function (c) {
   return c.tagName === "button" && c.text().indexOf("買い目の券種を更新") === 0; }).length };
 """, tmp_path)
     assert answer["buttons"] == 0
+
+
+# --- 馬名 → 馬柱のその馬 ---------------------------------------------------------
+
+JUMP = """
+var payload = JSON.parse(JSON.stringify(PAYLOAD));
+payload.raceId = "202606040611";
+payload.horses.forEach(function (h) { h.horse_id = "H" + h.number; });
+render(payload);
+var rows = NODES.panel.findAll(function (c) { return c.tagName === "tr" && c.byClass("horse-jump").length; });
+var row3 = rows[2];
+var name3 = row3.byClass("horse-jump")[0];
+var box3 = row3.findAll(function (c) { return c.tagName === "input"; })[0];
+"""
+
+
+@needs_jsc
+def test_the_horse_name_jumps_to_the_grid_row(script, tmp_path):
+    """単勝・複勝の表で馬名を押すと、馬柱のその馬の行へ飛ぶ（チェックは入れない）。"""
+    answer = run_component(script, JUMP + """
+var target = putInParent("pg-202606040611-H3", new Node("tr"));
+row3.fire("click", { target: name3 });
+var answer = { jumped: !!target.scrolledIntoView, checked: box3.checked,
+               lit: (target.attrs["class"] || "").indexOf("pg-jumped") >= 0 };
+""", tmp_path)
+    assert answer == {"jumped": True, "checked": False, "lit": True}
+
+
+@needs_jsc
+def test_without_the_grid_the_name_selects_the_row(script, tmp_path):
+    """馬柱が無い画面（スマホ・別のレース）では、今までどおり行を選ぶだけ。"""
+    answer = run_component(script, JUMP + """
+var other = putInParent("pg-202606040612-H3", new Node("tr"));   // 別のレースの馬柱の行
+row3.fire("click", { target: name3 });
+var answer = { jumped: !!other.scrolledIntoView, checked: box3.checked };
+""", tmp_path)
+    assert answer == {"jumped": False, "checked": True}
