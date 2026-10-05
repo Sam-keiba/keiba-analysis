@@ -487,10 +487,26 @@ def test_compact_lap_chart_drops_the_goal_labels_only():
     assert len(build_lap_spec(rows)["layer"]) == 3
     spec = build_lap_spec(rows, compact=True)
     assert len(spec["layer"]) == 2                          # 線とゴールの◆は残す
-    assert spec["height"] <= 320
+    assert spec["height"] <= 300
 
 
 def test_pc_charts_are_unchanged_by_default():
     spec = build_phase_spec(build_phase_rows([LONG]))
     assert len(spec["layer"]) == 2
     assert spec["layer"][0]["encoding"]["color"]["legend"]["direction"] == "horizontal"
+
+
+def test_compact_chart_keeps_its_height_for_the_plot():
+    """凡例の行が増えてもグラフ本体が潰れないよう、スマホは高さを本体だけに使う。"""
+    spec = build_phase_spec(build_phase_rows([LONG]), compact=True)
+    assert spec["autosize"]["type"] == "fit-x"
+    y = spec["layer"][0]["encoding"]["y"]
+    assert y["axis"]["title"] is None                       # 見出しは画面側に横書きで出す
+    assert y["axis"]["values"] == [10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5]
+
+
+def test_compact_lines_out_of_the_money_stay_readable():
+    spec = build_phase_spec(build_phase_rows([LONG]), compact=True)
+    encoding = spec["layer"][0]["encoding"]
+    assert min(encoding["opacity"]["scale"]["range"]) >= 0.8
+    assert min(encoding["strokeWidth"]["scale"]["range"]) >= 2.5

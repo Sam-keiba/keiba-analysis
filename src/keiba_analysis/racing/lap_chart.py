@@ -183,8 +183,21 @@ def build_goal_rows(rows: list[dict]) -> list[dict]:
     return list(goals.values())
 
 
-# スマホ（compact）の高さ。幅が狭いので、PCより低くして縦長になりすぎないようにする
-COMPACT_CHART_HEIGHT = 320
+# スマホ（compact）のグラフ本体の高さ。凡例は高さに含めない（autosize が fit-x）ので、
+# 凡例の行数が増えてもグラフは潰れない
+COMPACT_CHART_HEIGHT = 300
+# スマホは着外の線も読めるように、PCほど細く・薄くしない（色で見分けるため）
+COMPACT_PLACE_WIDTHS = [4.0, 2.5, 2.5]
+COMPACT_PLACE_OPACITIES = [1.0, 0.8, 0.8]
+COMPACT_LEGEND_TITLE = "凡例（着順・日付・競馬場・コース・グレード・レース名）"
+
+
+def _compact_y_axis(domain: list[float]) -> dict:
+    """スマホの縦軸。見出しは画面側（グラフの上の小さな文字）に出すので、軸には付けない。
+    目盛りは0.5秒ごと。"""
+    low, high = domain
+    values = [round(low + 0.5 * i, 1) for i in range(int((high - low) / 0.5) + 1)]
+    return {"title": None, "values": values, "labelFontSize": 11, "format": ".1f"}
 
 
 def _color(color_legend: bool, races: list[str], compact: bool = False) -> dict:
@@ -200,7 +213,12 @@ def _color(color_legend: bool, races: list[str], compact: bool = False) -> dict:
         "columnPadding": 10, "titlePadding": 4,
     }
     if compact:
-        legend.update({"direction": "vertical", "columns": 1, "labelLimit": 320, "rowPadding": 4})
+        legend.update({
+            "direction": "vertical", "columns": 1, "labelLimit": 360, "rowPadding": 6,
+            "labelFontSize": 13, "symbolStrokeWidth": 4, "symbolSize": 200,
+            "title": COMPACT_LEGEND_TITLE, "titleFontWeight": "normal", "titleColor": "#6b6865",
+            "titlePadding": 8, "offset": 14,
+        })
     return {
         "field": "race",
         "type": "nominal",
@@ -235,21 +253,24 @@ def _stroke_dash() -> dict:
     }
 
 
-def _place_emphasis() -> dict:
+def _place_emphasis(compact: bool = False) -> dict:
     """複勝圏内の走を太く濃く、着外を細く薄く（線の層だけに付ける）。
 
     レースごとの色（`color`）・種別の点線（`strokeDash`）とは別の軸なので、
     3つを重ねてもぶつからない。凡例はグラフ下の説明文で補う。
+    スマホ（compact）は着外の線も色で見分けられるよう、差を小さくする。
     """
+    widths = COMPACT_PLACE_WIDTHS if compact else PLACE_WIDTHS
+    opacities = COMPACT_PLACE_OPACITIES if compact else PLACE_OPACITIES
     return {
         "strokeWidth": {
             "field": "place", "type": "nominal",
-            "scale": {"domain": PLACE_ORDER, "range": PLACE_WIDTHS},
+            "scale": {"domain": PLACE_ORDER, "range": widths},
             "legend": None,
         },
         "opacity": {
             "field": "place", "type": "nominal",
-            "scale": {"domain": PLACE_ORDER, "range": PLACE_OPACITIES},
+            "scale": {"domain": PLACE_ORDER, "range": opacities},
             "legend": None,
         },
     }
@@ -270,6 +291,7 @@ def _axes(color_legend: bool, races: list[str], compact: bool = False) -> dict:
             "title": Y_TITLE,
             # netkeibaの走行データと同じく、上へ行くほど速い（10秒側）向きにする
             "scale": {"domain": Y_DOMAIN, "clamp": True, "nice": False, "reverse": True},
+            **({"axis": _compact_y_axis(Y_DOMAIN)} if compact else {}),
         },
         "color": _color(color_legend, races, compact),
     }
@@ -294,7 +316,7 @@ def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT, compact: bool =
         "encoding": {
             **_axes(color_legend=True, races=races, compact=compact),
             "strokeDash": _stroke_dash(),
-            **_place_emphasis(),
+            **_place_emphasis(compact),
             "tooltip": [
                 {"field": "race", "type": "nominal", "title": "レース"},
                 {"field": "finish", "type": "nominal", "title": "着順"},
@@ -323,11 +345,17 @@ def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT, compact: bool =
             "text": {"field": "goal_label", "type": "nominal"},
         },
     }
-    layers = [line_layer, goal_point_layer] if compact else [line_layer, goal_point_layer, goal_label_layer]
+    if compact:
+        return {
+            "height": height,
+            # 高さはグラフ本体だけ（凡例のぶんで潰れないように）
+            "autosize": {"type": "fit-x", "contains": "padding"},
+            "layer": [line_layer, goal_point_layer],
+        }
     return {
         "height": height,
         "autosize": {"type": "fit", "contains": "padding"},
-        "layer": layers,
+        "layer": [line_layer, goal_point_layer, goal_label_layer],
     }
 
 
@@ -447,6 +475,7 @@ def _phase_axes(rows: list[dict], races: list[str], color_legend: bool, compact:
             "title": PHASE_Y_TITLE,
             # 200m版と同じく、上へ行くほど速い向きにする
             "scale": {"domain": PHASE_Y_DOMAIN, "clamp": True, "nice": False, "reverse": True},
+            **({"axis": _compact_y_axis(PHASE_Y_DOMAIN)} if compact else {}),
         },
         "color": _color(color_legend, races, compact),
     }
@@ -470,7 +499,7 @@ def build_phase_spec(rows: list[dict], height: int = PHASE_CHART_HEIGHT, compact
         "encoding": {
             **_phase_axes(rows, races, color_legend=True, compact=compact),
             "strokeDash": _stroke_dash(),
-            **_place_emphasis(),
+            **_place_emphasis(compact),
             "tooltip": [
                 {"field": "race", "type": "nominal", "title": "レース"},
                 {"field": "finish", "type": "nominal", "title": "着順"},
@@ -502,7 +531,8 @@ def build_phase_spec(rows: list[dict], height: int = PHASE_CHART_HEIGHT, compact
     if compact:
         return {
             "height": height,
-            "autosize": {"type": "fit", "contains": "padding"},
+            # 高さはグラフ本体だけ（凡例のぶんで潰れないように）
+            "autosize": {"type": "fit-x", "contains": "padding"},
             "padding": {"left": 2, "top": 5, "right": 8, "bottom": 5},
             "layer": [line_layer],
         }
