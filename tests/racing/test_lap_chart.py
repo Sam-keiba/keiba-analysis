@@ -455,3 +455,42 @@ def test_the_finish_is_in_the_tooltip():
                  build_phase_spec(build_phase_rows([{**LONG, "finish_position": 1}]))):
         fields = [t["field"] for t in _line_encoding(spec)["tooltip"]]
         assert "finish" in fields
+
+
+# --- スマホ（compact） ---------------------------------------------------------
+
+
+def test_compact_phase_chart_has_no_labels_at_the_line_ends():
+    """スマホでは線の右端の着順をやめる（幅が狭く、グラフ本体が細く潰れるため）。"""
+    rows = build_phase_rows([LONG])
+    spec = build_phase_spec(rows, compact=True)
+    assert len(spec["layer"]) == 1
+    assert spec["padding"]["right"] < 20
+    legend = spec["layer"][0]["encoding"]["color"]["legend"]
+    assert legend["direction"] == "vertical" and legend["columns"] == 1
+    assert spec["layer"][0]["encoding"]["x"]["axis"]["labelOverlap"] is False   # 6区分を全部出す
+
+
+def test_compact_charts_put_the_finish_at_the_head_of_the_legend():
+    rows = build_phase_rows([{**LONG, "finish_position": 1}])
+    head = rows[0]["finish"].split(" ")[0]
+    assert head == "1着"
+    spec = build_phase_spec(rows, compact=True)
+    races = {r["race"] for r in spec["layer"][0]["data"]["values"]}
+    assert all(r.startswith(head + " ") for r in races)
+    assert rows[0]["race"] in next(iter(races))            # 元の行は書き換えない
+
+
+def test_compact_lap_chart_drops_the_goal_labels_only():
+    estimate = EstimatedLaps(values=[12.9, 11.2, 12.3], is_reference=False)
+    rows = build_lap_rows([RUN], {("202601010101", None): estimate})
+    assert len(build_lap_spec(rows)["layer"]) == 3
+    spec = build_lap_spec(rows, compact=True)
+    assert len(spec["layer"]) == 2                          # 線とゴールの◆は残す
+    assert spec["height"] <= 320
+
+
+def test_pc_charts_are_unchanged_by_default():
+    spec = build_phase_spec(build_phase_rows([LONG]))
+    assert len(spec["layer"]) == 2
+    assert spec["layer"][0]["encoding"]["color"]["legend"]["direction"] == "horizontal"

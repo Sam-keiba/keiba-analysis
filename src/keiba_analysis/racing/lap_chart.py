@@ -183,22 +183,44 @@ def build_goal_rows(rows: list[dict]) -> list[dict]:
     return list(goals.values())
 
 
-def _color(color_legend: bool, races: list[str]) -> dict:
-    """レースごとの色と凡例（200m版・3区分版で共通）。"""
+# スマホ（compact）の高さ。幅が狭いので、PCより低くして縦長になりすぎないようにする
+COMPACT_CHART_HEIGHT = 320
+
+
+def _color(color_legend: bool, races: list[str], compact: bool = False) -> dict:
+    """レースごとの色と凡例（200m版・3区分版で共通）。
+
+    PCは下に小さく横並び。スマホ（compact）は横に並べると切れるので、下に1列で縦に並べる。
+    """
+    legend = {
+        # 主役はグラフ本体なので、凡例は下に小さく・横並びで出す
+        "orient": "bottom", "direction": "horizontal", "columns": 4,
+        "symbolType": "stroke", "labelFontSize": 12, "titleFontSize": 11,
+        "symbolSize": 80, "labelLimit": 215, "rowPadding": 2,
+        "columnPadding": 10, "titlePadding": 4,
+    }
+    if compact:
+        legend.update({"direction": "vertical", "columns": 1, "labelLimit": 320, "rowPadding": 4})
     return {
         "field": "race",
         "type": "nominal",
         "title": LEGEND_TITLE,
         "sort": races,
         "scale": {"range": LINE_COLORS},
-        "legend": {
-            # 主役はグラフ本体なので、凡例は下に小さく・横並びで出す
-            "orient": "bottom", "direction": "horizontal", "columns": 4,
-            "symbolType": "stroke", "labelFontSize": 12, "titleFontSize": 11,
-            "symbolSize": 80, "labelLimit": 215, "rowPadding": 2,
-            "columnPadding": 10, "titlePadding": 4,
-        } if color_legend else None,
+        "legend": legend if color_legend else None,
     }
+
+
+def _with_finish_in_legend(rows: list[dict]) -> list[dict]:
+    """スマホ（compact）用。線の右端の着順ラベルを出さない代わりに、凡例の頭に着順を付ける。
+
+    `finish` は「1着 (東京 ク10.1)」の形なので、頭の「1着」だけを使う。
+    """
+    out = []
+    for row in rows:
+        head = (row.get("finish") or "").split(" ")[0]
+        out.append({**row, "race": f'{head} {row["race"]}' if head and head != DASH else row["race"]})
+    return out
 
 
 def _stroke_dash() -> dict:
@@ -233,7 +255,7 @@ def _place_emphasis() -> dict:
     }
 
 
-def _axes(color_legend: bool, races: list[str]) -> dict:
+def _axes(color_legend: bool, races: list[str], compact: bool = False) -> dict:
     """レイヤー共通の軸・色の指定（軸は固定、色はレースごと）。"""
     return {
         "x": {
@@ -249,15 +271,19 @@ def _axes(color_legend: bool, races: list[str]) -> dict:
             # netkeibaの走行データと同じく、上へ行くほど速い（10秒側）向きにする
             "scale": {"domain": Y_DOMAIN, "clamp": True, "nice": False, "reverse": True},
         },
-        "color": _color(color_legend, races),
+        "color": _color(color_legend, races, compact),
     }
 
 
-def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT) -> dict:
+def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT, compact: bool = False) -> dict:
     """Vega-Liteの定義を組み立てる（`$schema` は付けない。理由はモジュール冒頭）。
 
     折れ線（ラップ）＋ゴールの◆＋ゴールの距離ラベル、の3層を重ねる。
+    `compact=True`（スマホ）はゴールのラベルを出さず、着順は凡例の頭に付ける（幅が狭いため）。
     """
+    if compact:
+        rows = _with_finish_in_legend(rows)
+        height = min(height, COMPACT_CHART_HEIGHT)
     races = list(dict.fromkeys(row["race"] for row in rows))
     goals = build_goal_rows(rows)
 
@@ -266,7 +292,7 @@ def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT) -> dict:
         # 太さは place で決めるので、markには置かない（encodingが勝つため紛らわしい）
         "mark": {"type": "line", "point": {"filled": True, "size": 28}},
         "encoding": {
-            **_axes(color_legend=True, races=races),
+            **_axes(color_legend=True, races=races, compact=compact),
             "strokeDash": _stroke_dash(),
             **_place_emphasis(),
             "tooltip": [
@@ -297,10 +323,11 @@ def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT) -> dict:
             "text": {"field": "goal_label", "type": "nominal"},
         },
     }
+    layers = [line_layer, goal_point_layer] if compact else [line_layer, goal_point_layer, goal_label_layer]
     return {
         "height": height,
         "autosize": {"type": "fit", "contains": "padding"},
-        "layer": [line_layer, goal_point_layer, goal_label_layer],
+        "layer": layers,
     }
 
 
@@ -398,8 +425,11 @@ def _spread_labels(rows: list[dict]) -> list[dict]:
     return ordered
 
 
-def _phase_axes(rows: list[dict], races: list[str], color_legend: bool) -> dict:
-    """3区分版の軸（層をまたいで同じものを使う）。"""
+def _phase_axes(rows: list[dict], races: list[str], color_legend: bool, compact: bool = False) -> dict:
+    """3区分版の軸（層をまたいで同じものを使う）。
+
+    スマホ（compact）は横に6つの区分が入りきるよう、目盛りの字を小さくし、間引かせない。
+    """
     return {
         "x": {
             "field": "phase",
@@ -408,7 +438,8 @@ def _phase_axes(rows: list[dict], races: list[str], color_legend: bool) -> dict:
             "sort": list(PHASE_LABELS),
             "scale": {"padding": 0.35},
             # ラベルを横書きで出す（既定だと縦に回ってしまう）
-            "axis": {"labelAngle": 0, "labelFontSize": 12, "labelPadding": 6},
+            "axis": {"labelAngle": 0, "labelFontSize": 10 if compact else 12, "labelPadding": 6,
+                     **({"labelOverlap": False} if compact else {})},
         },
         "y": {
             "field": "pace_sec",
@@ -417,22 +448,27 @@ def _phase_axes(rows: list[dict], races: list[str], color_legend: bool) -> dict:
             # 200m版と同じく、上へ行くほど速い向きにする
             "scale": {"domain": PHASE_Y_DOMAIN, "clamp": True, "nice": False, "reverse": True},
         },
-        "color": _color(color_legend, races),
+        "color": _color(color_legend, races, compact),
     }
 
 
-def build_phase_spec(rows: list[dict], height: int = PHASE_CHART_HEIGHT) -> dict:
+def build_phase_spec(rows: list[dict], height: int = PHASE_CHART_HEIGHT, compact: bool = False) -> dict:
     """区分ごとのVega-Liteの定義（`$schema` は付けない。理由はモジュール冒頭）。
 
     折れ線の層と、線の右端に着順を出す層の2層。
+    `compact=True`（スマホ）は線の右端の着順を出さず（グラフが細く潰れるため）、
+    着順は凡例の頭に付ける。凡例は下に1列で縦に並べる。
     """
+    if compact:
+        rows = _with_finish_in_legend(rows)
+        height = min(height, COMPACT_CHART_HEIGHT)
     races = list(dict.fromkeys(row["race"] for row in rows))
     line_layer = {
         "data": {"values": rows},
         # 太さは place で決めるので、markには置かない（encodingが勝つため紛らわしい）
         "mark": {"type": "line", "point": {"filled": True, "size": 60}},
         "encoding": {
-            **_phase_axes(rows, races, color_legend=True),
+            **_phase_axes(rows, races, color_legend=True, compact=compact),
             "strokeDash": _stroke_dash(),
             **_place_emphasis(),
             "tooltip": [
@@ -463,6 +499,13 @@ def build_phase_spec(rows: list[dict], height: int = PHASE_CHART_HEIGHT) -> dict
             "text": {"field": "finish_label", "type": "nominal"},
         },
     }
+    if compact:
+        return {
+            "height": height,
+            "autosize": {"type": "fit", "contains": "padding"},
+            "padding": {"left": 2, "top": 5, "right": 8, "bottom": 5},
+            "layer": [line_layer],
+        }
     return {
         "height": height,
         "autosize": {"type": "fit", "contains": "padding"},
