@@ -55,6 +55,11 @@ def _axes(field: str, compact: bool = False) -> dict:
     }
 
 
+def projected_color(surface: str | None) -> str:
+    """想定ラップ（実線）の色＝馬場の色。スマホは凡例を画面側のHTMLで描くので、同じ色を使えるように出す。"""
+    return SURFACE_BADGE.get(surface or "", ("#3f9c6d", ""))[0]
+
+
 def build_race_lap_spec(
     average: AverageLaps, projected: list[float], surface: str | None = None, height: int = CHART_HEIGHT,
     compact: bool = False,
@@ -65,7 +70,7 @@ def build_race_lap_spec(
     凡例を下に出す。
     """
     rows = build_rows(average, projected)
-    color = SURFACE_BADGE.get(surface or "", ("#3f9c6d", ""))[0]
+    color = projected_color(surface)
     legend = {
         "orient": "bottom", "direction": "horizontal", "labelFontSize": 11,
         "titleFontSize": 11, "symbolType": "stroke", "symbolSize": 90,
@@ -92,7 +97,7 @@ def build_race_lap_spec(
                 "datum": AVERAGE_KIND,
                 "title": LEGEND_TITLE,
                 "scale": {"domain": [AVERAGE_KIND, PROJECTED_KIND], "range": [AVERAGE_COLOR, color]},
-                "legend": legend,
+                "legend": None if compact else legend,
             },
             "tooltip": tooltip,
         },
@@ -105,7 +110,7 @@ def build_race_lap_spec(
                 "datum": PROJECTED_KIND,
                 "title": LEGEND_TITLE,
                 "scale": {"domain": [AVERAGE_KIND, PROJECTED_KIND], "range": [AVERAGE_COLOR, color]},
-                "legend": legend,
+                "legend": None if compact else legend,
             },
             "tooltip": tooltip,
         },
