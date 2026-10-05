@@ -41,13 +41,14 @@ def build_rows(average: AverageLaps, projected: list[float]) -> list[dict]:
     return rows
 
 
-def _axes(field: str) -> dict:
+def _axes(field: str, compact: bool = False) -> dict:
+    """軸。スマホ（compact）は縦軸の見出しを画面側（グラフの上の小さな文字）に出すので、軸には付けない。"""
     return {
         "x": {"field": "distance_m", "type": "quantitative", "title": X_TITLE, "scale": {"nice": False}},
         "y": {
             "field": field,
             "type": "quantitative",
-            "title": Y_TITLE,
+            "title": None if compact else Y_TITLE,
             # 他のラップグラフと同じく、上へ行くほど速い
             "scale": {"zero": False, "nice": True, "reverse": True},
         },
@@ -55,7 +56,8 @@ def _axes(field: str) -> dict:
 
 
 def build_race_lap_spec(
-    average: AverageLaps, projected: list[float], surface: str | None = None, height: int = CHART_HEIGHT
+    average: AverageLaps, projected: list[float], surface: str | None = None, height: int = CHART_HEIGHT,
+    compact: bool = False,
 ) -> dict:
     """平均（点線＋ばらつきの帯）と想定（実線）を重ねた定義。
 
@@ -77,7 +79,7 @@ def build_race_lap_spec(
         "mark": {"type": "area", "opacity": BAND_OPACITY, "color": AVERAGE_COLOR},
         "encoding": {
             "x": _axes("average")["x"],
-            "y": {**_axes("low")["y"], "title": Y_TITLE},
+            "y": {**_axes("low", compact)["y"], "title": None if compact else Y_TITLE},
             "y2": {"field": "high"},
         },
     }
@@ -85,7 +87,7 @@ def build_race_lap_spec(
         "mark": {"type": "line", "strokeDash": [4, 3], "strokeWidth": LINE_WIDTH,
                  "point": {"filled": True, "size": 22}},
         "encoding": {
-            **_axes("average"),
+            **_axes("average", compact),
             "color": {
                 "datum": AVERAGE_KIND,
                 "title": LEGEND_TITLE,
@@ -98,7 +100,7 @@ def build_race_lap_spec(
     projected_layer = {
         "mark": {"type": "line", "strokeWidth": LINE_WIDTH + 0.5, "point": {"filled": True, "size": 38}},
         "encoding": {
-            **_axes("projected"),
+            **_axes("projected", compact),
             "color": {
                 "datum": PROJECTED_KIND,
                 "title": LEGEND_TITLE,

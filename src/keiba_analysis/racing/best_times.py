@@ -185,6 +185,38 @@ def render_best_times(entries: list[dict], rows: list[dict], surface: str | None
     return "".join(lines)
 
 
+def render_best_time_cards(entries: list[dict], rows: list[dict], surface: str | None = None) -> str:
+    """スマホの持ちタイム。表（`render_best_times`）と同じ中身を、1頭1行のカード型で縦に並べる。
+
+    1行目: 馬番・馬名 ／ タイム
+    2行目: 開催 ／ 馬場 ／ 硬さ ／ 脚質　　着順 ／ 上り ／ 前後3F ペース
+    """
+    by_horse = {e.get("horse_id"): e for e in entries}
+    if not rows:
+        return ""
+    hardness = "含水" if surface == "dirt" else "ク"
+    lines = ["<div class='bt-cards'>"]
+    for row in rows:
+        entry = by_horse.get(row.get("horse_id")) or {}
+        name = escape(entry.get("horse_name") or DASH)
+        last_3f = row.get("last_3f")
+        last_3f_text = DASH if last_3f is None else f"{float(last_3f):.1f}"
+        where = " ／ ".join([
+            escape(row.get("venue_name") or DASH), escape(row.get("going") or DASH),
+            f"{hardness}{escape(hardness_text(row))}", _style_cell(row),
+        ])
+        lines.append(
+            f"<div class='bt-card' title='{_row_title(row)}'>"
+            f"<b class='bt-card-name'>{_waku_badge(entry)}<span>{name}</span></b>"
+            f"<b class='bt-card-time'>{escape(format_race_time(row.get('time_sec')))}</b>"
+            f"<span class='bt-card-where'>{where}</span>"
+            f"<span class='bt-card-run'>{_finish_cell(row)} ／ 上{last_3f_text} ／ "
+            f"前後3F {escape(splits_label(row))} {pace_mark(row) or ''}</span></div>"
+        )
+    lines.append("</div>")
+    return "".join(lines)
+
+
 def horses_without_record(entries: list[dict], rows: list[dict]) -> list[str]:
     """その条件での記録が無い馬の名前（馬番順）。"""
     recorded = {r.get("horse_id") for r in rows}

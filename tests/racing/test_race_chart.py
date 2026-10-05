@@ -48,3 +48,11 @@ def test_axis_is_reversed_like_the_other_lap_charts():
     assert y["scale"]["reverse"] is True              # 上へ行くほど速い
     assert spec["layer"][2]["encoding"]["color"]["scale"]["range"][1] == SURFACE_BADGE["dirt"][0]
     assert spec["layer"][1]["encoding"]["x"]["field"] == "distance_m"
+
+
+def test_compact_chart_leaves_the_y_title_to_the_page():
+    """スマホは縦軸の見出しを画面側に横書きで出すので、軸からは外す（グラフを広く使う）。"""
+    spec = build_race_lap_spec(AVERAGE, PROJECTED, "turf", compact=True)
+    assert all(layer["encoding"]["y"].get("title") is None for layer in spec["layer"])
+    pc = build_race_lap_spec(AVERAGE, PROJECTED, "turf")
+    assert all(layer["encoding"]["y"].get("title") for layer in pc["layer"])

@@ -5,6 +5,7 @@ from keiba_analysis.shared.style import RUNNING_STYLE_COLORS
 from keiba_analysis.racing.best_times import (
     horses_without_record,
     neighbour_distances,
+    render_best_time_cards,
     render_best_times,
     tab_conditions,
 )
@@ -253,3 +254,20 @@ def test_the_last_3f_is_rounded_to_one_decimal():
     """生の値をそのまま出すと `33.599999999999994` のように見えてしまう。"""
     rows = [{**ROWS[0], "last_3f": 33.3 + 0.3}]
     assert _cells(render_best_times(ENTRIES, rows, "turf"), "bt-num") == ["33.6"]
+
+
+# --- スマホのカード型 ------------------------------------------------------------
+
+
+def test_cards_show_the_same_runs_in_the_same_order():
+    html = render_best_time_cards(ENTRIES, ROWS)
+    assert html.count("class='bt-card'") == len(ROWS)
+    assert html.index("ロブチェン") < html.index("アルトラムス")
+    assert "2:22.7" in html and "上33.2" in html
+    assert "逃げ" in html                                   # その1走の脚質
+
+
+def test_cards_follow_the_surface_for_the_hardness():
+    assert "ク" in render_best_time_cards(ENTRIES, ROWS, "turf")
+    assert "含水" in render_best_time_cards(ENTRIES, ROWS, "dirt")
+    assert render_best_time_cards(ENTRIES, []) == ""
