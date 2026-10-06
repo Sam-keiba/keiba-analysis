@@ -167,12 +167,11 @@ def test_goal_markers_are_layered_without_their_own_legend():
     assert label_layer["encoding"]["color"]["legend"] is None
 
 
-def test_chart_is_large_and_legend_is_small_and_horizontal():
+def test_chart_is_wide_and_leaves_the_legend_to_the_page():
+    """資料どおり横長のグラフ。凡例は画面側のHTML（legend_items）で出すので、グラフには付けない。"""
     spec = build_lap_spec(build_lap_rows([RUN]))
-    assert spec["height"] == CHART_HEIGHT == 560
-    legend = spec["layer"][0]["encoding"]["color"]["legend"]
-    assert legend["direction"] == "horizontal"   # 縦一列ではなく横並び
-    assert legend["labelFontSize"] == 12 and legend["columns"] == 4   # 横に4走ぶん並べる
+    assert spec["height"] == CHART_HEIGHT == 300
+    assert spec["layer"][0]["encoding"]["color"]["legend"] is None
 
 
 def test_faster_laps_are_at_the_top():
@@ -206,8 +205,8 @@ def test_lines_are_thick_enough_to_read():
 
 
 def test_default_number_of_runs():
-    """既定は5走（画面のスライダーで増やせる）。"""
-    assert DEFAULT_CHART_RUNS == 5
+    """既定は3走（資料どおり。画面のスライダーで5走まで増やせる）。"""
+    assert DEFAULT_CHART_RUNS == 3
 
 
 def test_phase_axis_is_fixed_between_10_5_and_13_5():
@@ -436,7 +435,7 @@ def test_the_colour_and_the_dashes_are_untouched():
     spec = build_lap_spec(build_lap_rows([{**RUN, "finish_position": 5}]))
     encoding = _line_encoding(spec)
     assert encoding["color"]["field"] == "race"
-    assert encoding["color"]["legend"] is not None                  # 凡例は残る
+    assert encoding["color"]["scale"]["range"] == LINE_COLORS        # 色はレースごと（凡例は画面側）
     assert encoding["strokeDash"]["field"] == "kind"
     assert encoding["strokeDash"]["scale"]["domain"] == LAP_KINDS
 
@@ -495,7 +494,7 @@ def test_compact_lap_chart_drops_the_goal_labels_only():
 def test_pc_charts_are_unchanged_by_default():
     spec = build_phase_spec(build_phase_rows([LONG]))
     assert len(spec["layer"]) == 2
-    assert spec["layer"][0]["encoding"]["color"]["legend"]["direction"] == "horizontal"
+    assert spec["layer"][0]["encoding"]["color"]["legend"] is None
 
 
 def test_compact_chart_keeps_its_height_for_the_plot():

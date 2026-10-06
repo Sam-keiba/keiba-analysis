@@ -49,11 +49,11 @@ LINE_COLORS = ["#1a7f4b", "#201f1d", "#2b4a6b", "#9a9795", "#b8892b"]
 # 軸は全馬・全レースで固定する（馬同士を見比べられるように）
 X_DOMAIN = [0, 3200]
 Y_DOMAIN = [10, 14]
-CHART_HEIGHT = 560
+CHART_HEIGHT = 300          # 資料どおり横長（凡例はグラフの外に出すので本体だけの高さ）
 # グラフに重ねる走数の既定値（画面のスライダーで変えられる）。
 # 1走あたりレースラップと個別推定の2本を描くので、多いと線が重なって読みにくくなる。
 # その場合は走数を減らすか、レースラップの表示を切ってもらう。
-DEFAULT_CHART_RUNS = 5
+DEFAULT_CHART_RUNS = 3   # 資料どおり3走（スライダーで最大5走まで）
 LINE_WIDTH = 3
 
 # 複勝圏内（1〜3着）の走は**太く濃く**、着外は細く薄く描く。
@@ -201,24 +201,18 @@ def _compact_y_axis(domain: list[float]) -> dict:
 
 
 def _color(color_legend: bool, races: list[str], compact: bool = False) -> dict:
-    """レースごとの色と凡例（200m版・3区分版で共通）。
+    """レースごとの色（200m版・3区分版で共通）。
 
-    PCは下に小さく横並び。スマホ（compact）はグラフの外にHTMLで縦に並べる（`legend_items`）。
+    凡例はPC・スマホともグラフの外にHTMLで出す（`legend_items`。資料どおり）ので、グラフには付けない。
+    `color_legend` と `compact` は前の呼び出し方のために受け取るだけ。
     """
-    legend = {
-        # 主役はグラフ本体なので、凡例は下に小さく・横並びで出す
-        "orient": "bottom", "direction": "horizontal", "columns": 4,
-        "symbolType": "stroke", "labelFontSize": 12, "titleFontSize": 11,
-        "symbolSize": 80, "labelLimit": 215, "rowPadding": 2,
-        "columnPadding": 10, "titlePadding": 4,
-    }
     return {
         "field": "race",
         "type": "nominal",
         "title": LEGEND_TITLE,
         "sort": races,
         "scale": {"range": LINE_COLORS},
-        "legend": legend if color_legend and not compact else None,
+        "legend": None,
     }
 
 
@@ -372,7 +366,7 @@ PHASE_Y_TITLE = "1Fあたりのラップ（秒）"
 # DB全体では9.8〜15.1秒まで散るので、はみ出す値は clamp で軸の端に描く（数値はtooltipで見える）。
 PHASE_Y_DOMAIN = [10.5, 13.5]
 # 横に6点なので、200m版より少しだけ縦を詰める
-PHASE_CHART_HEIGHT = 480
+PHASE_CHART_HEIGHT = 300
 
 
 def build_phase_rows(

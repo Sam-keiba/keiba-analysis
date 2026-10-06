@@ -90,6 +90,12 @@ def _columns(surface: str | None) -> list[tuple[str, str]]:
     ]
 
 
+def _distance_text(row: dict) -> str:
+    """`1400m`（資料の表記）。距離が無ければ「—」。"""
+    distance = row.get("distance_m")
+    return f"{distance}m" if distance else DASH
+
+
 def _winner_badge(row: dict) -> str:
     """勝ち馬の馬番（枠の色の四角。持ちタイムの馬番と同じ見た目）。結果が無ければ「—」。"""
     number = row.get("winner_umaban")
@@ -128,7 +134,8 @@ def render_meeting(rows: list[dict]) -> str:
         lines.append(
             f"<tr title='{name}'>"
             f"<td class='mt-no'>{row.get('race_no') or DASH}R</td>"
-            f"<td class='mt-course'>{escape(course_label(row))}</td>"
+            # 資料どおり距離は「1400m」。内回り・外回りはマウスを乗せると出す
+            f"<td class='mt-course' title='{escape(course_label(row))}'>{escape(_distance_text(row))}</td>"
             f"<td class='mt-class'>{escape(class_short(row))}</td>"
             f"<td class='mt-name'><div>{name}</div></td>"
             f"<td class='mt-waku'>{_winner_badge(row)}</td>"
@@ -161,7 +168,6 @@ def render_meeting_cards(rows: list[dict]) -> str:
     lines = ["<div class='bt-cards mt-cards'>"]
     for row in rows:
         pace = pace_mark({**row, "race_first_3f": row.get("first_3f"), "race_last_3f": row.get("last_3f")})
-        distance = row.get("distance_m")
         split = split_label(row) or DASH
         where = " ／ ".join([
             escape(row.get("going") or DASH), f"{hardness}{escape(hardness_text(row))}", _style_cell(row),
@@ -170,7 +176,7 @@ def render_meeting_cards(rows: list[dict]) -> str:
             "<div class='mt-card'>"
             f"<div class='mt-card-head'><b class='mt-card-no'>{row.get('race_no') or DASH}R</b>"
             f"<b class='mt-card-class'>{escape(class_short(row))}</b>"
-            f"<span class='mt-card-dist'>{f'{distance}m' if distance else DASH}</span>"
+            f"<span class='mt-card-dist'>{_distance_text(row)}</span>"
             f"<span class='mt-card-race'>{escape(row.get('race_name') or '')}</span></div>"
             "<div class='bt-card'>"
             # 勝ち馬がまだ取り込めていないレースは、馬番の札を出さずに「—」1つだけ

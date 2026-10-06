@@ -1494,3 +1494,21 @@ def test_the_phone_pill_is_short(script, tmp_path):
     answer = _pill(script, tmp_path, layout="phone",
                    scenario="var answer = { text: pill().text(), label: pill().attrs['aria-label'] };")
     assert answer == {"text": "↻", "label": "↻ 全券種を取り込む（約21秒）"}
+
+
+@needs_jsc
+def test_the_pc_adds_singles_from_under_the_slip(script, tmp_path):
+    """PCは資料どおり、買い目パネルの下の「買い目へ追加(N)」から足す（単勝・複勝は追加先を選ぶ）。"""
+    answer = run_component(script, """
+render(PAYLOAD);
+NODES.panel.byClass("tick")[0].children[0].click();
+NODES.panel.byClass("tick")[2].children[0].click();
+var label = NODES.slip.byClass("slip-add")[0].text();
+press(NODES.slip, "買い目へ追加(2)");
+press(NODES.slip, "複勝へ");
+var answer = {
+  label: label,
+  groups: NODES.slip.byClass("g").map(function (g) { return g.byClass("bet")[0].text() + ":" + g.byClass("c-num").map(function (n) { return n.text(); }).join(","); }),
+};
+""", tmp_path)
+    assert answer == {"label": "買い目へ追加(2)", "groups": ["複勝:1,3"]}

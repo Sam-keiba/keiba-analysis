@@ -550,6 +550,17 @@
   body.phone .g-head .split, body.phone .sheet-close, body.phone .slip-foot .refresh-all {
     border-radius: 999px !important;
   }
+  /* PC: 表の下の「選んだ馬を〜へ」の段は出さず、買い目パネルの下の「買い目へ追加(N)」にまとめる（資料） */
+  .acts-line { display: none !important; }
+  .slip-foot .bulk .slip-add { background: var(--accent) !important; color: #fff !important; }
+  .slip-add-choice { display: none; gap: 6px; margin-top: 6px; }
+  .slip-add-choice.open { display: flex; }
+  /* 券種のピル（資料: padding 10px 18px、選択中の件数は淡い緑） */
+  .tab { height: auto; padding: 10px 18px; }
+  .tab[aria-selected="true"] .n { color: #d4ecdd; }
+  body.phone .tab[aria-selected="true"] .n { color: #d4ecdd; }
+  table.single { box-shadow: 0 1px 6px rgba(0,0,0,.1); }
+  table.single td.odds:last-of-type { font: 400 13px 'Noto Sans JP', sans-serif; }
   /* 取り込みボタンの ↻／✓ は別の span（資料: 17px） */
   .import-pill .ic { font-size: 17px; line-height: 1; }
   .import-pill .ic:empty { display: none; }
@@ -796,16 +807,45 @@
 
   /** バーの左半分（追加ボタン）を、いまのタブと選んだ頭数に合わせる。 */
   function updatePhoneAdd() {
-    const add = document.getElementById("phone-bar-add");
-    if (!add) return;
     const t = tab(active);
     const first = t && bet(t.bets[0]);
     const single = !!(first && first.legs === 1);
     // 選べないうち（オッズ未取得など）は灰色の0のまま
     const n = single ? pickedSingles().length : (phoneCombo ? phoneCombo.count : 0);
+    // PC: 買い目パネルの下の「買い目へ追加(N)」（資料）
+    const slipAdd = document.getElementById("slip-add");
+    if (slipAdd) {
+      slipAdd.textContent = "買い目へ追加(" + n + ")";
+      const choice = document.getElementById("slip-add-choice");
+      if (choice) { choice.textContent = ""; choice.classList.remove("open"); }
+    }
+    const add = document.getElementById("phone-bar-add");
+    if (!add) return;
     add.textContent = "買い目へ追加(" + n + (single ? "頭)" : "点)");
     add.classList.toggle("on", n > 0);
     hidePhoneChoice();
+  }
+
+  /** PC: 買い目パネルの下の「買い目へ追加」。単勝・複勝は追加先を選ばせ、組み合わせはパネルの追加と同じ。 */
+  function onSlipAdd(choice) {
+    const t = tab(active);
+    if (!t) return;
+    const first = bet(t.bets[0]);
+    if (first && first.legs > 1) {
+      if (phoneCombo && phoneCombo.count) phoneCombo.run();
+      return;
+    }
+    if (!pickedSingles().length) return;
+    const bets = t.bets.map(bet).filter(function (b) { return !!b; });
+    if (bets.length === 1) { addSinglesTo(bets[0].key); return; }
+    if (choice.classList.contains("open")) { choice.textContent = ""; choice.classList.remove("open"); return; }
+    choice.textContent = "";
+    bets.forEach(function (b) {
+      const button = el("button", { class: "mini go", type: "button", text: b.label + "へ" });
+      button.addEventListener("click", function () { addSinglesTo(b.key); });
+      choice.appendChild(button);
+    });
+    choice.classList.add("open");
   }
 
   function hidePhoneChoice() {
@@ -1295,6 +1335,13 @@
     }
 
     const bulk = el("div", { class: "bulk" });
+    const addChoice = el("div", { class: "slip-add-choice", id: "slip-add-choice" });
+    if (!phone) {
+      // 資料どおり、表の下ではなく買い目パネルの下に「買い目へ追加(N)」（主な操作の緑）
+      const add = el("button", { class: "mini go slip-add", id: "slip-add", type: "button", text: "買い目へ追加(0)" });
+      add.addEventListener("click", function () { onSlipAdd(addChoice); });
+      bulk.appendChild(add);
+    }
     [["すべて選択", true], ["すべて解除", false]].forEach(function (pair) {
       const button = el("button", { class: "mini", type: "button", text: pair[0] });
       button.addEventListener("click", function () {
@@ -1338,6 +1385,7 @@
       foot.appendChild(refresh);
     }
     foot.appendChild(bulk);
+    if (!phone) foot.appendChild(addChoice);
     foot.appendChild(totals);
 
     // スマホの買い目シートを閉じる（PCでは出さない）
@@ -1352,6 +1400,7 @@
       list, foot,
     ]));
     drawTotals();
+    updatePhoneAdd();
     setHeight();
   }
 
