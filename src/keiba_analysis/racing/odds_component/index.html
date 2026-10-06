@@ -303,7 +303,7 @@
     --pop2: #2168c3;
     --pop3: #189a54;
   }
-  * { border-radius: 0 !important; }
+  /* 2026-10 の新デザイン（角丸の白いカード・ピル・弱い影）。角を0にそろえていた指定はやめた */
   body {
     background: transparent;
     font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
@@ -312,45 +312,47 @@
   .slip { flex: 1 1 340px; max-width: 420px; }
   input[type="checkbox"] { accent-color: var(--accent); }
 
-  /* 券種タブ: 2pxの枠で並べ、選択中は黒地・白文字 */
-  .tabs { gap: 0; border-bottom: 2px solid var(--line-strong); }
+  /* 券種: ピルのチップ（選択中は緑の塗り＋件数） */
+  .tabs { gap: 8px; padding: 2px 2px 8px; border-bottom: none; }
   .tab {
-    border: 2px solid var(--line-strong); border-bottom: none; margin: 0 0 -2px -2px;
-    background: transparent; color: var(--ink); padding: 10px 18px;
-    font-size: 14px; font-weight: 900; white-space: nowrap;
+    height: 40px; margin: 0; padding: 0 16px; border: none; border-radius: 999px;
+    background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    font-size: 14px; font-weight: 700; white-space: nowrap;
   }
-  .tab:first-child { margin-left: 0; }
-  .tab:hover { background: var(--selected); color: var(--ink); }
-  .tab[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tab:hover { background: #fff; color: var(--ink); }
+  .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
   .tab.empty { color: #9b9797; }
-  .tab[aria-selected="true"].empty { color: #d4d1d0; }
+  .tab[aria-selected="true"].empty { color: #fff; }
   .tab .n { font-size: 11px; font-weight: 400; margin-left: 6px; color: var(--muted); }
-  .tab[aria-selected="true"] .n { color: #d4d1d0; }
+  .tab[aria-selected="true"] .n { color: #c4e3d1; }
 
   .panel { padding: 20px 0 4px; }
   .head-line { gap: 12px; margin-bottom: 10px; }
   .head-line strong { font-size: 16px; font-weight: 900; }
   /* 更新マーク: 取り込める印だと分かるよう、枠を太くして緑にする */
   .refresh {
-    border: 2px solid var(--line-strong); background: transparent; color: var(--ink);
-    padding: 3px 10px; font-size: 11px; font-weight: 700;
+    border: none; border-radius: 999px; background: #e1dfde; color: var(--ink);
+    padding: 4px 12px; font-size: 11px; font-weight: 700;
   }
-  .refresh:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .refresh:hover { color: #fff; background: var(--accent); }
   .chip-text { font-size: 11px; font-weight: 700; }
   /* 未取得: 点線の枠を大きくして、取り込めばよいことを目立たせる */
   .empty-box {
-    border: 2px dashed #bab6b6; padding: 40px 24px; font-size: 13px; color: #605d5d;
+    border: 2px dashed #bab6b6; border-radius: 16px; padding: 40px 24px; font-size: 13px; color: #605d5d;
   }
   .note { color: var(--muted); }
 
-  /* 表: 黒い見出し行、2pxの外枠、行は細い区切り線 */
-  table { border: 2px solid var(--line-strong); }
+  /* 表: 白い角丸カード、見出し行は薄い灰、行は細い区切り線 */
+  table {
+    border: none; border-collapse: separate; border-spacing: 0; border-radius: 16px; overflow: hidden;
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  }
   th, td { border: none; border-bottom: 1px solid var(--line); padding: 9px 8px; }
   thead th {
-    background: var(--head); color: #fff; font-size: 10px; letter-spacing: .06em; border-bottom: none;
+    background: #e1dfde; color: #3a3836; font-size: 10px; letter-spacing: .06em; border-bottom: none;
   }
   .num {
-    min-width: 26px; height: 26px; line-height: 26px; padding: 0; border: none;
+    min-width: 26px; height: 26px; line-height: 26px; padding: 0; border: none; border-radius: 7px;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-size: 14px; font-weight: 900;
   }
   .odds { font-family: 'Archivo', 'Noto Sans JP', sans-serif; font-weight: 700; }
@@ -368,56 +370,58 @@
   table.combos tbody tr:nth-child(even) { background: transparent; }
   table.combos tbody tr:hover { background: var(--selected); }
   table.single td.tick, table.combos .tick { text-align: center; }
-  .scroll { border: 2px solid var(--line-strong); }
+  .scroll { border: none; border-radius: 16px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .scroll table.combos { box-shadow: none; }
   .scroll table.combos { border: none; }
   table.axis caption {
-    background: var(--head); color: #fff; border: none; font-size: 11px; padding: 4px 8px;
+    background: #e1dfde; color: #3a3836; border: none; font-size: 11px; padding: 4px 8px;
   }
 
-  /* ボタン: 2pxの枠。主ボタン（追加）は緑の塗り */
+  /* ボタン: 灰のピル。主ボタン（追加）は緑の塗り */
   .mini {
-    border: 2px solid var(--line-strong); background: transparent; color: var(--ink);
-    font-weight: 700; padding: 5px 12px;
+    border: none; border-radius: 999px; background: #e1dfde; color: var(--ink);
+    font-weight: 700; padding: 6px 14px;
   }
-  .mini:hover { background: var(--selected); color: var(--ink); border-color: var(--line-strong); }
-  .mini.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .mini:hover { background: #d4d1d0; color: var(--ink); }
+  .mini.go { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(26,127,75,.35); }
   .mini.go:hover { background: var(--accent-700); border-color: var(--accent-700); color: #fff; }
   .mini.go[disabled]:hover { background: var(--accent); color: #fff; }
   .modes .mini[aria-pressed="true"], .opts .mini[aria-pressed="true"],
-  .sorts .mini[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
-  .form-wrap, .slot { border: 2px solid var(--line-strong); }
-  .slot h4 { background: var(--selected); border-bottom: 2px solid var(--line-strong); }
+  .sorts .mini[aria-pressed="true"] { background: #fff; color: #0f5632; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+  .form-wrap { border: none; border-radius: 16px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .slot { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .slot h4 { background: #e1dfde; border-bottom: none; }
   .slot label:hover { background: var(--selected); }
   h3.section { border-left: 4px solid var(--accent); font-weight: 900; }
   .count b { color: var(--accent-700); }
 
-  /* 買い目（右）: 見出しは Archivo の太字、まとまりごとの左の帯は券種の色のまま */
-  .slip-box { border: 2px solid var(--line-strong); }
+  /* 買い目（右）: 白い角丸カード、見出しは薄い灰。まとまりごとの左の帯は券種の色のまま */
+  .slip-box { border: none; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.1); }
   .slip-box > h3 {
-    background: var(--selected); border-bottom: 2px solid var(--line-strong);
+    background: #e1dfde; border-bottom: none;
     font: 900 18px 'Archivo', 'Noto Sans JP', sans-serif; padding: 12px 18px;
   }
   .slip-box > h3 .saved { font: 400 11px 'Noto Sans JP', sans-serif; }
   .slip-empty { padding: 16px 18px; font-size: 12px; line-height: 1.8; color: #605d5d; }
   .g { padding: 12px 18px 12px 14px; border-bottom: 1px solid var(--line); }
   .g:has(.g-head input:checked) { background: var(--selected); }
-  .g-head .bet { padding: 2px 10px; font-weight: 900; }
+  .g-head .bet { padding: 2px 10px; font-weight: 900; border-radius: 999px; }
   .g-head .pts { color: var(--accent-700); }
-  .g-head .split { border: 2px solid var(--line-strong); background: transparent; color: var(--ink); }
-  .g-head .split:hover { background: var(--selected); color: var(--ink); border-color: var(--line-strong); }
+  .g-head .split { border: none; border-radius: 999px; background: #e1dfde; color: var(--ink); }
+  .g-head .split:hover { background: #d4d1d0; color: var(--ink); }
   .g-head .x { font-size: 16px; color: #9b9797; }
   .g-money { margin-top: 12px; }
   .g-money input {
-    width: 92px; padding: 6px 8px; font-size: 14px; border: 2px solid var(--line-strong);
+    width: 92px; padding: 6px 8px; font-size: 14px; border: 1.5px solid var(--line); border-radius: 10px;
     background: #fff; font-variant-numeric: tabular-nums;
   }
   .g-money .sub { font-size: 15px; font-weight: 900; }
   .g-payout { color: var(--accent-700); font-size: 11px; margin-top: 6px; }
   .slip-foot { background: transparent; padding: 14px 18px; border-top: 1px solid var(--line); }
   .slip-foot .refresh-all {
-    border: 2px solid var(--line-strong); color: var(--ink); background: transparent; padding: 8px 10px;
+    border: none; border-radius: 999px; color: var(--ink); background: #e1dfde; padding: 8px 14px;
   }
-  .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); color: #fff; }
   .slip-total { align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
   .slip-total span:first-child { font-size: 14px; font-weight: 700; }
   .slip-total .yen { font: 900 28px 'Archivo', 'Noto Sans JP', sans-serif; color: var(--accent-700); }
@@ -445,7 +449,7 @@
   body.phone .sheet-close { display: inline-flex; }
   .sheet-close {
     display: none; appearance: none; align-items: center; min-height: 44px; padding: 0 14px;
-    border: 2px solid var(--line-strong); background: transparent; font: inherit; font-weight: 700;
+    border: none; border-radius: 999px; background: #e1dfde; font: inherit; font-weight: 700;
   }
   #phone-bar {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 20;
@@ -494,7 +498,7 @@
   /* 単勝・複勝の「選んだ馬を〜へ」の段は、スマホでは下のバーの左半分にまとめる */
   body.phone .acts-line { display: none; }
   /* 見出し: 取得時刻の灰のピルと、右端の丸い ↻（全券種をまとめて取り込む） */
-  body.phone .head-line { display: flex; align-items: center; gap: 10px; }
+  .head-line { display: flex; align-items: center; gap: 10px; }
   .time-chip {
     font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px !important; background: #e1dfde;
   }
@@ -644,11 +648,21 @@
   }
   function setHeight() {
     // スマホは画面の高さに固定して中でスクロールさせる（下部バーとシートを部品の中に出すため）
-    const height = phone ? phoneFrameHeight() : document.documentElement.scrollHeight + 8;
+    // PCは中身（.wrap）の高さで測る。documentElement.scrollHeight は枠より小さくならないので、
+    // 一度大きく測ると（隠れたタブで幅が狭いうちに測るなど）縮まなくなる
+    const wrap = document.querySelector(".wrap");
+    const content = wrap && wrap.offsetHeight ? wrap.offsetTop + wrap.offsetHeight : document.documentElement.scrollHeight;
+    const height = phone ? phoneFrameHeight() : content + 8;
     if (!heightChanged(height, lastHeight)) return;
     lastHeight = height;
     send("streamlit:setFrameHeight", { height: height });
   }
+
+  // 最初は隠れているタブ（PCのオッズ）の中で描かれると、高さを0のまま送ってしまう。
+  // 見えるようになると部品の枠の幅が変わる（resize）ので、そのとき高さを送り直す
+  window.addEventListener("resize", function () {
+    if (window.innerWidth > 50) setHeight();      // 幅が無いうち（隠れている間）は測らない
+  });
 
   /** スマホで部品に使える高さ（画面の高さ − ヘッダー・タブバーなど）。 */
   function phoneFrameHeight() {
@@ -1297,23 +1311,6 @@
   }
 
   /** 見出しの右の更新マーク（その券種だけ取り込み直す）。閲覧モードでは出さない。 */
-  function refreshChip(t) {
-    if (payload.readOnly) return el("span", { class: "chip-text", text: t.chip || "" });
-    const button = el("button", {
-      class: "refresh", type: "button",
-      title: t.label + "のオッズをJRA公式から取り込み直す",
-    }, [
-      el("span", { class: "mark", text: "↻" }),
-      el("span", { text: t.chip || "" }),
-    ]);
-    button.addEventListener("click", function () {
-      button.setAttribute("disabled", "disabled");
-      button.lastChild.textContent = "取り込み中…";
-      requestFetch(t.key);
-    });
-    return button;
-  }
-
   /** スマホの見出し: 取得時刻は灰のピル（押せない）。 */
   function phoneTimeChip(t) {
     return el("span", { class: "time-chip", text: t.chip || "未取得" });
@@ -1752,16 +1749,16 @@
     const b = bet(t.bets[0]);
     if (!b) { setHeight(); return; }
 
-    panel.appendChild(el("div", { class: "head-line" }, phone
-      ? [el("strong", { text: t.label + "オッズ" }), phoneTimeChip(t), phoneRefreshAll()].filter(Boolean)
-      : [el("strong", { text: t.label + "オッズ" }), refreshChip(t)]));
+    // 資料（PC・スマホとも）: 見出し＋取得時刻の灰のピル＋右端の丸い ↻（全券種をまとめて取り込む）
+    panel.appendChild(el("div", { class: "head-line" },
+      [el("strong", { text: t.label + "オッズ" }), phoneTimeChip(t), phoneRefreshAll()].filter(Boolean)));
 
     if (!tabCount(t).available) {
       panel.appendChild(el("div", {
         class: "empty-box",
         text: payload.readOnly
           ? t.label + "はまだ取り込んでいません（取り込みは手元のPCから行います）。"
-          : t.label + "はまだ取り込んでいません。見出しの右の更新マーク（↻）を押すと取り込めます（3秒に1回）。",
+          : t.label + "はまだ取り込んでいません。見出しの右の ↻ を押すと、全券種をまとめて取り込めます（約21秒）。",
       }));
       setHeight();
       return;

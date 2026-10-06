@@ -268,7 +268,7 @@ const SENT = [];       // Streamlitへ返した値（setComponentValue）
 const HEIGHTS = [];    // Streamlitへ伝えた高さ
 const HANDLERS = [];
 const window = {
-  addEventListener: function (type, fn) { HANDLERS.push(fn); },
+  addEventListener: function (type, fn) { if (type === "message") HANDLERS.push(fn); },
   parent: {
     postMessage: function (m) {
       if (m.type === "streamlit:setComponentValue") SENT.push(m.value);

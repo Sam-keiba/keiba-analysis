@@ -33,9 +33,10 @@
     margin: 0; color: var(--ink); background: transparent;
     font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
   }
+  /* 盤: 白い角丸カード＋影（2026-10 の新デザイン） */
   .board {
-    border: 2px solid var(--ink); border-radius: 0; overflow: hidden;
-    background: transparent;
+    border: none; border-radius: 18px; overflow: hidden;
+    background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.1);
   }
   /* 段の背景は**塗らない**。全面にパステルを敷くと、主役の馬が沈む。
      段の見分けは左端の色帯だけに任せる。 */
@@ -71,8 +72,8 @@
   /* --- 馬（主役） --- */
   .marker {
     position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center;
-    gap: 8px; padding: 5px 14px 5px 6px; height: 36px; border-radius: 0; cursor: grab;
-    background: #fff; border: 2px solid var(--ink); white-space: nowrap;
+    gap: 8px; padding: 5px 14px 5px 6px; height: 36px; border-radius: 999px; cursor: grab;
+    background: #fff; border: 2px solid #d4d1d0; box-shadow: 0 1px 4px rgba(0,0,0,.12); white-space: nowrap;
     touch-action: none; user-select: none;
     transition: box-shadow .12s ease, transform .12s ease;
   }
@@ -128,20 +129,20 @@
   .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
   /* 保存ボタンは無い（触るたびに自動で保存する）。代わりに状態だけ小さく出す */
   .status {
-    font-size: 12px; font-weight: 900; color: #fff; white-space: nowrap;
-    padding: 4px 10px; border-radius: 0; background: var(--ink);
+    font-size: 12px; font-weight: 700; color: #0f5632; white-space: nowrap;
+    padding: 4px 12px; border-radius: 999px; background: #e6f3ec;
   }
-  .status.idle { color: #fff; background: var(--ink); }
+  .status.idle { color: #0f5632; background: #e6f3ec; }
   .hint { font-size: 11px; color: var(--muted); }
   .editor {
-    margin-top: 8px; padding: 8px; border: 2px solid var(--ink); border-radius: 0;
+    margin-top: 8px; padding: 8px; border: none; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1);
     background: #fff; display: none;
   }
   .editor.open { display: block; }
   .editor-head { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
   .editor-why { font-size: 11px; color: var(--muted); margin-bottom: 6px; line-height: 1.4; }
   textarea {
-    width: 100%; min-height: 62px; border: 2px solid var(--ink); border-radius: 0;
+    width: 100%; min-height: 62px; border: 1.5px solid #d4d1d0; border-radius: 10px;
     padding: 6px; font-family: inherit; font-size: 12px; resize: vertical;
   }
   /* --- スマホ（payload.layout = "phone"。board.PHONE の寸法と対で直すこと） --------------
@@ -649,6 +650,13 @@
     document.getElementById("axis-left").textContent = "← " + ((payload.axis || {}).left || "");
     document.getElementById("axis-right").textContent = ((payload.axis || {}).right || "") + " →";
     draw();
+  });
+
+  // 最初は隠れているタブ（PCの予想ボード）の中で描かれると、高さを0のまま送ってしまう。
+  // 見えるようになると部品の枠の幅が変わる（resize）ので、描き直して高さを送り直す
+  window.addEventListener("resize", function () {
+    if (window.innerWidth <= 50) return;          // 幅が無いうち（隠れている間）は描かない
+    if (lanes.length) draw(); else setHeight();
   });
 
   // 画面の向きを変えたら（縦持ち⇔横持ち）、回すかどうかを決め直して描き直す
