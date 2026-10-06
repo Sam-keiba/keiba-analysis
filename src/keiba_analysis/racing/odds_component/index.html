@@ -502,13 +502,16 @@
   .time-chip {
     font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px !important; background: #e1dfde;
   }
-  .refresh-all-round {
-    margin-left: auto; width: 36px; height: 36px; padding: 0; border: none; border-radius: 999px !important;
-    background: #e6f3ec; color: #0f5632; font-size: 18px; line-height: 1; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; transition: transform .12s;
+  /* 取り込みボタン（淡緑のピル。進捗で左から濃くなる） */
+  .import-pill {
+    margin-left: auto; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px 0 12px;
+    border: none; border-radius: 999px !important; background: #e6f3ec; color: #0f5632;
+    font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1); transition: transform .12s;
   }
-  .refresh-all-round:active { transform: scale(.92); }
-  .refresh-all-round[disabled] { opacity: .5; }
+  .import-pill:active { transform: scale(.96); }
+  .import-pill.running { cursor: default; }
+  body.phone .import-pill { height: 32px; padding: 0 12px; font-size: 12px; }
   /* 下の浮いたバー: 左半分「買い目へ追加(N頭)」、右半分「買い目 N点 ▲ ／ 合計」。黒地・角丸18px・影 */
   #phone-bar {
     left: 12px; right: 12px; bottom: 8px; height: 58px; padding: 0; align-items: stretch;
@@ -592,6 +595,7 @@
   let appliedDraw = null;            // そのうち**買い目を除いた**ぶんの符号
   let lastHeight = null;             // 最後にStreamlitへ伝えた高さ
   let phone = false;                 // スマホ版（payload.layout = "phone"）
+  let importing = false;             // 取り込みボタンを押して、最初の進み具合が届くのを待っている
   let waitingFetch = false;          // 更新マークを押して取り込みを待っている
   let slip = [];                     // 買い目（まとまりの配列）
   let nextGroup = 1;                 // まとまりの番号（画面の中だけの通し番号）
@@ -1317,17 +1321,35 @@
   }
 
   /**
-   * スマホの見出しの右端の丸い ↻。**全券種をまとめて**取り込む（資料どおり）。
-   * クラウド（readOnly）ではスクレイプしないので出さない。
+   * 見出しの右端の取り込みボタン（淡緑のピル。資料 2026-10 夕方版）。**全券種をまとめて**取り込む。
+   *
+   * 進捗は**実際の取り込み**に連動する。Python側が1券種ずつ取り込んで、そのたびに
+   * `payload.progress = {done, total}` を付けて描き直すので、それで淡緑を左から濃くする。
+   * 終わったら `{finished: "HH:MM"}`。押した直後（最初の描き直しが届くまで）は 0% を出しておく。
    */
-  function phoneRefreshAll() {
+  function importButton() {
     if (payload.readOnly) return null;
+    const given = payload.progress && !payload.progress.failed ? payload.progress : null;
+    const progress = given || (importing ? { done: 0, total: 1 } : null);
+    const running = !!(progress && progress.total && progress.done < progress.total);
+    const percent = running ? Math.round(progress.done / progress.total * 100) : 0;
+    let label;
+    if (running) label = (phone ? "取り込み中 " : "取り込み中… ") + percent + "%";
+    else if (progress && progress.finished) label = (phone ? "✓ 済み " : "✓ 取り込み済み ") + progress.finished + "現在";
+    else label = phone ? "↻ 取り込む" : "↻ 全券種を取り込む（約21秒）";
     const button = el("button", {
-      class: "refresh-all-round", type: "button", text: "↻",
+      class: "import-pill" + (running ? " running" : ""), type: "button", text: label,
       title: "全券種をまとめて取り込む（約21秒）", "aria-label": "全券種をまとめて取り込む",
     });
-    button.addEventListener("click", function () {
+    if (running) {
+      button.style.background = "linear-gradient(90deg, #c4e3d1 " + percent + "%, #e6f3ec " + percent + "%)";
       button.setAttribute("disabled", "disabled");
+    }
+    button.addEventListener("click", function () {
+      if (running) return;
+      importing = true;
+      button.setAttribute("disabled", "disabled");
+      button.textContent = phone ? "取り込み中 0%" : "取り込み中… 0%";
       requestFetchMany((payload.tabs || []).map(function (t) { return t.key; }));
     });
     return button;
@@ -1751,7 +1773,7 @@
 
     // 資料（PC・スマホとも）: 見出し＋取得時刻の灰のピル＋右端の丸い ↻（全券種をまとめて取り込む）
     panel.appendChild(el("div", { class: "head-line" },
-      [el("strong", { text: t.label + "オッズ" }), phoneTimeChip(t), phoneRefreshAll()].filter(Boolean)));
+      [el("strong", { text: t.label + "オッズ" }), phoneTimeChip(t), importButton()].filter(Boolean)));
 
     if (!tabCount(t).available) {
       panel.appendChild(el("div", {
@@ -1927,6 +1949,8 @@
     }
     appliedVersion = next.version || null;
     waitingFetch = false;
+    // 進み具合（または失敗）が届いたら、押した直後の仮の 0% 表示はやめる
+    if (next.progress) importing = false;
     phone = next.layout === "phone";
     bodyClass("phone", phone);
     // 買い目**以外**が前と同じか（金額を直しただけならここは変わらない）

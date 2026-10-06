@@ -1442,3 +1442,56 @@ var answer = { empty: empty, picked: picked, bets: slipBets(), points: NODES.sli
     assert answer["empty"] == "買い目へ追加(0点)"     # 馬連でも左半分を出す
     assert answer["picked"] == "買い目へ追加(2点)"
     assert answer["bets"] == ["馬連"] and answer["points"] == ["2点"]
+
+
+# --- 取り込みボタン（淡緑のピル。進み具合は実際の取り込みに連動。資料 2026-10 夕方版） ------------
+
+
+def _pill(script, tmp_path, progress=None, layout="pc", scenario=""):
+    payload = _payload()
+    payload["progress"] = progress
+    payload["layout"] = layout
+    return run_component(script, """
+render(PAYLOAD);
+function pill() { return NODES.panel.find(function (c) { return (c.attrs["class"] || "").indexOf("import-pill") === 0; }); }
+""" + scenario, tmp_path, payload)
+
+
+@needs_jsc
+def test_the_import_pill_says_what_it_does(script, tmp_path):
+    answer = _pill(script, tmp_path, scenario="var answer = { text: pill().text() };")
+    assert answer["text"] == "↻ 全券種を取り込む（約21秒）"
+
+
+@needs_jsc
+def test_the_import_pill_fills_with_the_real_progress(script, tmp_path):
+    answer = _pill(script, tmp_path, {"done": 2, "total": 7}, scenario="""
+var b = pill();
+var answer = { text: b.text(), disabled: b.attrs.disabled === "disabled", bg: b.style.background };
+""")
+    assert answer["text"] == "取り込み中… 29%"
+    assert answer["disabled"] is True
+    assert "29%" in answer["bg"]                    # 淡緑が左から29%まで濃くなる
+
+
+@needs_jsc
+def test_the_import_pill_says_when_it_finished(script, tmp_path):
+    answer = _pill(script, tmp_path, {"finished": "12:34"}, scenario="var answer = { text: pill().text() };")
+    assert answer["text"] == "✓ 取り込み済み 12:34現在"
+
+
+@needs_jsc
+def test_pressing_the_import_pill_asks_for_every_bet_type(script, tmp_path):
+    answer = _pill(script, tmp_path, scenario="""
+pill().click();
+var answer = { sent: SENT.map(function (v) { return v.kind; }), bets: SENT[0] && SENT[0].bets, text: pill().text() };
+""")
+    assert answer["sent"] == ["fetch"]
+    assert len(answer["bets"]) >= 2
+    assert answer["text"] == "取り込み中… 0%"     # 押した直後（最初の進み具合が届くまで）
+
+
+@needs_jsc
+def test_the_phone_pill_is_short(script, tmp_path):
+    answer = _pill(script, tmp_path, layout="phone", scenario="var answer = { text: pill().text() };")
+    assert answer["text"] == "↻ 取り込む"

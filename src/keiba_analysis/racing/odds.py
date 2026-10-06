@@ -114,8 +114,13 @@ def build_payload(
     focus: str | None = None, slip: list[dict] | None = None,
     slip_saved_at: str | None = None, read_only: bool = False,
     layout: str = "pc", reserve_px: int = 0, race_id: str | None = None,
+    progress: dict | None = None,
 ) -> dict:
     """オッズのコンポーネントに渡す中身をまとめる。
+
+    `progress` は全券種の取り込みの進み具合（`{done, total}`、終わったら `{finished: "HH:MM"}`、
+    失敗したら `{failed: True}`）。取り込みボタンの淡緑の塗りに使う。符号に入れるので、
+    1券種進むたびにボタンが描き直される。
 
     取り込んでいない券種もタブには出す（淡く出して「取り込めます」と伝える）。
     `focus` はいま取り込んだ券種で、コンポーネントはそのタブを開く
@@ -156,6 +161,7 @@ def build_payload(
         # reservePx は画面の高さのうち部品に使えない分（ヘッダー・タブバーなど）
         "layout": layout if layout in ("pc", "phone") else "pc",
         "reservePx": int(reserve_px),
+        "progress": progress,
     }
     # 買い目**以外**の符号。金額を直しただけのとき、画面を作り直さずに済ませるために使う
     # （作り直すと、入力した瞬間に買い目の枠が組み直されて上までスクロールしてしまう）
