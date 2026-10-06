@@ -323,7 +323,8 @@
       node.classList.remove("lifted");
       if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
       if (over) over.classList.remove("over");
-      if (!moved) { jumpToGrid(marker); return; }       // 押しただけ → 馬柱のその馬へ
+      // 押しただけ → PCは馬柱のその馬へ、スマホはその馬の詳細を開く（スマホには馬柱の表が無いため）
+      if (!moved) { if (phone) openDetail(marker); else jumpToGrid(marker); return; }
       if (!over) return;                                 // 盤の外で離した → 元のまま
       const y = parseFloat(node.dataset.dropY);
       placeAt(marker, over.dataset.tier, parseInt(over.dataset.col, 10), insertIndex(over, y, node));
@@ -336,6 +337,15 @@
   }
 
   // --- 馬柱との行き来 --------------------------------------------------------------
+
+  /** スマホ: 押した馬の詳細を開くよう Python へ伝える（保存とは別の値。`saved_at` は付けない）。 */
+  function openDetail(marker) {
+    if (!marker.horse_id) return;
+    send("streamlit:setComponentValue", {
+      value: { open: marker.horse_id, race_id: raceId, at: Date.now() },
+      dataType: "json",
+    });
+  }
 
   /**
    * 同じページの**馬柱のその馬の行**へ飛ぶ。行のidにはレースIDが入っている（`past_grid.grid_row_id`）ので、

@@ -222,6 +222,18 @@ var answer = { a: !!rowA.scrolledIntoView, b: !!rowB.scrolledIntoView,
 
 
 @needs_jsc
+def test_pressing_a_horse_on_the_phone_opens_its_detail(script, tmp_path):
+    """スマホには馬柱の表が無いので、押した馬の詳細を開くよう Python へ伝える（保存はしない）。"""
+    answer = run_board(script, """
+render(PAYLOAD);
+tap(chipOf("ロブチェン"));
+var answer = { sent: SENT.length, open: SENT[0] && SENT[0].open, race: SENT[0] && SENT[0].race_id,
+               saved: !!(SENT[0] && SENT[0].saved_at) };
+""", tmp_path, _payload(layout="phone"))
+    assert answer == {"sent": 1, "open": "h2", "race": "202606040611", "saved": False}
+
+
+@needs_jsc
 def test_a_horse_never_jumps_into_another_race(script, tmp_path):
     answer = run_board(script, """
 var other = putInParent("pg-202606040612-h1", new Node("tr"));

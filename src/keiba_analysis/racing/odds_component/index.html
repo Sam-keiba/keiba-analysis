@@ -550,6 +550,89 @@
   body.phone .g-head .split, body.phone .sheet-close, body.phone .slip-foot .refresh-all {
     border-radius: 999px !important;
   }
+  /* 取り込みボタンの ↻／✓ は別の span（資料: 17px） */
+  .import-pill .ic { font-size: 17px; line-height: 1; }
+  .import-pill .ic:empty { display: none; }
+  /* スマホ: 36pxの丸い ↻ だけ（資料） */
+  body.phone .import-pill.round {
+    width: 36px; height: 36px; padding: 0; justify-content: center; box-shadow: none; flex: none;
+  }
+  body.phone .import-pill.round .ic { font-size: 18px; }
+  body.phone .import-pill.round.running .ic { font-size: 10px; font-weight: 900; }
+
+  /* 買い目: 帯と券種のピルは緑（資料）。単勝・複勝は枠色の馬番＋馬名 */
+  .g { border-left-color: var(--accent) !important; }
+  .g-head .bet { background: var(--accent); }
+  .g-combos .c-horse { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .g-combos .c-num {
+    flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 13px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+  }
+  .g-combos .c-horse b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slip-box > h3 { background: #f8f4f4; border-bottom: 1px solid #d4d1d0; }
+  .slip-foot .mini, .slip-foot .refresh-all { border-radius: 14px !important; }
+  .slip-foot .refresh-all[disabled] { opacity: .5; }
+  .slip-total .yen { font-size: 30px; }
+
+  /* --- スマホの単勝・複勝の表（資料: 黒い見出し・行の下線だけ・人気は馬名の下） --- */
+  body.phone table.single { background: transparent; box-shadow: none; border-radius: 0 !important; overflow: visible; }
+  body.phone table.single thead th {
+    background: #201f1d !important; color: #fff !important; font-size: 10px; font-weight: 400; padding: 8px 6px;
+  }
+  body.phone table.single tbody td { border-bottom: 1px solid #d4d1d0; background: transparent; }
+  body.phone table.single tbody tr:has(input:checked) { background: #f8f4f4; }
+  body.phone table.single td.p .num { width: 26px; height: 26px; border-radius: 0 !important; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 13px; }
+  body.phone table.single td.name { max-width: none; text-align: left; }
+  body.phone table.single td.name .nm { font-size: 14px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.phone table.single td.name .pop { font-size: 11px; font-weight: 900; text-align: left; }
+  body.phone table.single td:nth-child(3) b { font-weight: 900; font-size: 14px; }
+  body.phone table.single td.odds:nth-last-child(2) { font: 900 16px 'Archivo', sans-serif; }
+  body.phone table.single td.odds:last-child { font: 400 11px 'Noto Sans JP', sans-serif; white-space: nowrap; }
+
+  /* スマホの下のバー: 下から84px・幅は456pxまで（資料）。追加先の「単勝へ／複勝へ」は白い44pxのピル2つ */
+  body.phone #phone-bar {
+    left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); max-width: 456px; bottom: 84px;
+  }
+  body.phone #phone-bar-choice {
+    left: 50%; transform: translateX(-50%); width: calc(100% - 24px); max-width: 456px; bottom: 152px;
+    padding: 0; background: transparent; box-shadow: none; border-radius: 0 !important;
+  }
+  body.phone #phone-bar-choice button {
+    flex: 1; height: 44px; background: #fff; color: #0f5632; font-size: 15px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.3);
+  }
+  body.phone { padding-bottom: 170px; }
+
+  /* スマホの買い目シート（資料: 見出し56px・淡い灰・下に2pxの線・✕） */
+  body.phone .slip { background: #f3f2f2; }
+  body.phone .slip-box { background: transparent; box-shadow: none; border-radius: 0 !important; }
+  body.phone .slip-box > h3 {
+    height: 56px; box-sizing: border-box; padding: 0 12px; background: #f8f4f4; border-bottom: 2px solid #201f1d;
+    justify-content: flex-start; font-size: 20px;
+  }
+  body.phone .slip-box > h3 .saved { margin-left: 6px; color: #6b6865; }
+  body.phone .sheet-close {
+    margin-left: auto; width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center;
+    background: transparent; font-size: 20px; font-weight: 400;
+  }
+  body.phone .g { padding: 12px 12px 12px 10px; background: transparent; }
+  body.phone .g-head input[type="checkbox"] { width: 24px; height: 24px; }
+  body.phone .g-head .split { height: 36px; padding: 0 14px; font-size: 12px; font-weight: 700; }
+  body.phone .g-head .x { width: 36px; height: 44px; font-size: 18px; }
+  body.phone .g-money { font-size: 12px; color: var(--ink); }
+  body.phone .g-money input {
+    width: 100px; height: 44px; box-sizing: border-box; padding: 0 10px; font-size: 16px;
+    border: 2px solid #201f1d; border-radius: 0 !important;
+  }
+  body.phone .g-money .sub { font-size: 16px; }
+  body.phone .slip-foot { padding: 14px 12px; }
+  body.phone .slip-foot .refresh-all { width: 100%; height: 48px; }
+  body.phone .slip-foot .mini {
+    height: 44px; border-radius: 14px !important; background: #e1dfde !important; color: var(--ink) !important;
+    box-shadow: none;
+  }
+
   /* 馬名を押すと馬柱のその馬へ（馬柱の馬名リンクと同じ緑の下線） */
   .horse-jump {
     cursor: pointer; text-decoration: underline; text-decoration-thickness: 2px;
@@ -1130,30 +1213,41 @@
         saveSlip();
       });
 
-      const color = (b && b.color) || "#6b716b";
+      // 券種のピルと左の帯は、資料どおり券種によらずアクセントの緑
       const head = el("div", { class: "g-head" }, [
         tick,
-        el("span", { class: "bet", text: b ? b.label : group.bet, style: "background:" + color }),
+        el("span", { class: "bet", text: b ? b.label : group.bet }),
         el("span", { class: "kind", text: kind }),
         el("span", { class: "pts", text: group.combos.length + "点" }),
       ]);
-      if (group.combos.length > 1) {     // 1点のまとまりは分けられない
-        const split = el("button", {
-          class: "split", type: "button", text: "ばらす",
-          title: "1点ずつに分けて、金額を別々に決める",
-        });
-        split.addEventListener("click", function () { splitGroup(group); });
-        head.appendChild(split);
-      }
+      // 「ばらす」は常に出す（資料どおり。1点のまとまりは分けても同じなので何もしない）
+      const split = el("button", {
+        class: "split", type: "button", text: "ばらす",
+        title: "1点ずつに分けて、金額を別々に決める",
+      });
+      split.addEventListener("click", function () { if (group.combos.length > 1) splitGroup(group); });
+      head.appendChild(split);
       head.appendChild(drop);
 
       const combos = el("div", { class: "g-combos" });
       const items = itemsOf(b);
       const byNumber = {};
       items.forEach(function (item) { byNumber[item.number] = item; });
+      const horseNames = {};
+      (payload.horses || []).forEach(function (h) { horseNames[h.number] = h; });
       group.combos.forEach(function (combo) {
         const row = el("div", { class: "c" });
-        combo.split("-").forEach(function (text) {
+        const parts = combo.split("-");
+        // 1頭の券種（単勝・複勝）は、資料どおり枠色の馬番と馬名を並べる
+        const horse = b && b.legs === 1 && parts.length === 1 ? horseNames[Number(parts[0])] : null;
+        if (horse) {
+          row.appendChild(el("span", { class: "c-horse" }, [
+            el("span", { class: "c-num", text: String(horse.number), style: "background:" + horse.bg + ";color:" + horse.fg }),
+            el("b", { text: horse.name }),
+          ]));
+        }
+        parts.forEach(function (text) {
+          if (horse) return;
           const item = byNumber[Number(text)] || { number: Number(text), bg: "#eef0ee", fg: "#6b716b" };
           row.appendChild(numberChip(item));
         });
@@ -1190,16 +1284,13 @@
       const money = el("div", { class: "g-money" }, [
         el("span", { text: "1点" }), amount, el("span", { text: "円" }), sub,
       ]);
-      // 左の帯も券種の色。まとまりが並んだときに見分けやすくする
-      list.appendChild(el("div", {
-        class: "g", style: "border-left-color:" + color,
-      }, [head, combos, money, payout]));
+      list.appendChild(el("div", { class: "g" }, [head, combos, money, payout]));
     });
 
     if (!slip.length) {
       list.appendChild(el("div", {
         class: "slip-empty",
-        text: "左の表で馬を選んで「買い目へ追加」を押すと、ここに積まれます。金額は1点あたりです。",
+        text: (phone ? "馬を選んで" : "左の表で馬を選んで") + "「買い目へ追加」を押すと、ここに積まれます。金額は1点あたりです。",
       }));
     }
 
@@ -1227,15 +1318,19 @@
     const foot = el("div", { class: "slip-foot" }, []);
 
     // 買い目に入れた券種だけ、まとめて取り込み直す（1券種＝1リクエスト・3秒間隔）
+    // ボタンは常に出す（資料どおり）。買い目が空のうちは押せない
     const wanted = payload.readOnly ? [] : slipTabKeys();
-    if (wanted.length) {
-      const seconds = wanted.length * 3;
+    if (!payload.readOnly) {
       const refresh = el("button", {
         class: "mini refresh-all", type: "button",
-        text: "買い目の券種を更新（" + wanted.length + "券種・約" + seconds + "秒）",
+        text: wanted.length
+          ? "買い目の券種を更新（" + wanted.length + "券種・約" + wanted.length * 3 + "秒）"
+          : "買い目の券種を更新",
         title: "買い目に入っている券種のオッズを、JRA公式から取り込み直す",
       });
+      if (!wanted.length) refresh.setAttribute("disabled", "disabled");
       refresh.addEventListener("click", function () {
+        if (!wanted.length) return;
         refresh.setAttribute("disabled", "disabled");
         refresh.textContent = "取り込み中…";
         requestFetchMany(wanted);
@@ -1246,12 +1341,12 @@
     foot.appendChild(totals);
 
     // スマホの買い目シートを閉じる（PCでは出さない）
-    const close = el("button", { class: "sheet-close", type: "button", text: "閉じる ↓" });
+    const close = el("button", { class: "sheet-close", type: "button", text: "✕", "aria-label": "閉じる" });
     close.addEventListener("click", function () { bodyClass("sheet-open", false); });
     box.appendChild(el("div", { class: "slip-box" }, [
       el("h3", {}, [
         el("span", { text: "買い目" }),
-        el("span", { class: "saved", text: slip.length ? "自動で保存されます" : "" }),
+        el("span", { class: "saved", text: "自動で保存されます" }),
         close,
       ]),
       list, foot,
@@ -1334,22 +1429,29 @@
     const running = !!(progress && progress.total && progress.done < progress.total);
     const percent = running ? Math.round(progress.done / progress.total * 100) : 0;
     let label;
-    if (running) label = (phone ? "取り込み中 " : "取り込み中… ") + percent + "%";
-    else if (progress && progress.finished) label = (phone ? "✓ 済み " : "✓ 取り込み済み ") + progress.finished + "現在";
-    else label = phone ? "↻ 取り込む" : "↻ 全券種を取り込む（約21秒）";
+    if (running) label = "取り込み中… " + percent + "%";
+    else if (progress && progress.finished) label = "✓ 取り込み済み " + progress.finished + "現在";
+    else label = "↻ 全券種を取り込む（約21秒）";
+    // スマホは資料どおり36pxの丸い ↻ だけ（取り込み中は％、済んだら ✓。下から淡緑が濃くなる）
+    const icon = running ? percent + "%" : (progress && progress.finished ? "✓" : "↻");
     const button = el("button", {
-      class: "import-pill" + (running ? " running" : ""), type: "button", text: label,
-      title: "全券種をまとめて取り込む（約21秒）", "aria-label": "全券種をまとめて取り込む",
-    });
+      class: "import-pill" + (running ? " running" : "") + (phone ? " round" : ""), type: "button",
+      title: phone ? label : "全券種をまとめて取り込む（約21秒）", "aria-label": label,
+    }, phone ? [el("span", { class: "ic", text: icon })] : [
+      el("span", { class: "ic", text: icon === "↻" || icon === "✓" ? icon : "" }),
+      el("span", { text: icon === "↻" || icon === "✓" ? label.slice(1) : label }),   // 「 全券種を…」（頭の空白ごと）
+    ]);
     if (running) {
-      button.style.background = "linear-gradient(90deg, #c4e3d1 " + percent + "%, #e6f3ec " + percent + "%)";
+      button.style.background = phone
+        ? "linear-gradient(0deg, #c4e3d1 " + percent + "%, #e6f3ec " + percent + "%)"
+        : "linear-gradient(90deg, #c4e3d1 " + percent + "%, #e6f3ec " + percent + "%)";
       button.setAttribute("disabled", "disabled");
     }
     button.addEventListener("click", function () {
       if (running) return;
       importing = true;
       button.setAttribute("disabled", "disabled");
-      button.textContent = phone ? "取り込み中 0%" : "取り込み中… 0%";
+      button.textContent = phone ? "0%" : "取り込み中… 0%";
       requestFetchMany((payload.tabs || []).map(function (t) { return t.key; }));
     });
     return button;
@@ -1360,9 +1462,10 @@
   function drawSingle(t) {
     const bets = t.bets.map(bet).filter(function (b) { return !!b; });
     const set = singlePicks;
-    const head = el("tr", {}, [el("th", { text: "" }), el("th", { text: "枠" }), el("th", { text: "馬番" }), el("th", { text: "馬名" })]);
+    // スマホは資料どおり6列（人気は馬名の下に小さく。見出しは「番」）
+    const head = el("tr", {}, [el("th", { text: "" }), el("th", { text: "枠" }), el("th", { text: phone ? "番" : "馬番" }), el("th", { text: "馬名" })]);
     bets.forEach(function (b) { head.appendChild(el("th", { text: b.label })); });
-    head.appendChild(el("th", { text: "人気" }));
+    if (!phone) head.appendChild(el("th", { text: "人気" }));
 
     const body = el("tbody", {});
     payload.horses.forEach(function (horse) {
@@ -1378,8 +1481,11 @@
             style: "background:" + horse.bg + ";color:" + horse.fg,
           }),
         ]),
-        el("td", { style: "text-align:center" }, [numberChip(horse)]),
-        el("td", { class: "name" }, [
+        el("td", { style: "text-align:center" }, [phone ? el("b", { text: String(horse.number) }) : numberChip(horse)]),
+        el("td", { class: "name" }, phone ? [
+          el("div", { class: "nm", text: horse.name }),
+          el("div", { class: "pop", "data-rank": horse.pop || null, text: horse.pop ? String(horse.pop) + "人気" : DASH }),
+        ] : [
           el("span", { class: "horse-jump", text: horse.name, title: "馬柱のこの馬へ" }),
         ]),
       ]);
@@ -1387,10 +1493,12 @@
         const low = oddsLow(b, combo);
         row.appendChild(el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
       });
-      row.appendChild(el("td", {
-        class: "pop", "data-rank": horse.pop || null,
-        text: horse.pop ? String(horse.pop) + "人気" : DASH,
-      }));
+      if (!phone) {
+        row.appendChild(el("td", {
+          class: "pop", "data-rank": horse.pop || null,
+          text: horse.pop ? String(horse.pop) + "人気" : DASH,
+        }));
+      }
       // 四角は小さいので、行のどこを押してもチェックが入るようにする
       // （四角そのものを押したときは、ブラウザが既に反転させているので何もしない）
       row.addEventListener("click", function (event) {

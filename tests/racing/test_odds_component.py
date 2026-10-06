@@ -465,15 +465,11 @@ def test_the_bet_slip_is_wide_enough_to_read(source: str):
 
 
 def test_each_bet_type_is_marked_with_its_own_colour(script: str, source: str):
-    """買い目に何券種か積んだとき、どれがどの券種かひと目で分かるようにする。
-
-    色は**Pythonから渡す**（style.py の BET_TYPE_COLORS）。画面側には書かない。
-    """
+    """買い目のまとまりは、券種名のピルと左の帯で見分ける。色は資料どおり券種によらず緑。"""
     body = take_function(script, "drawSlip")
-    assert "(b && b.color)" in body                      # payloadの色を使う
     assert 'class: "bet"' in body                        # 券種名のバッジ
-    assert "border-left-color:" in body                  # まとまりの左の帯
     assert "border-left: 4px solid" in _rule(source, ".g")
+    assert "border-left-color: var(--accent)" in source
 
 
 def test_the_bet_colours_are_not_written_into_the_component(script: str):
@@ -612,7 +608,7 @@ NODES.panel.byClass("tick")[7].children[0].click();
 press(NODES.panel, "選んだ馬を単勝へ");
 var answer = {
   combos: NODES.slip.byClass("g").map(function (g) {
-    return g.byClass("num").map(function (n) { return n.text(); }).join("");
+    return g.byClass("c-num").map(function (n) { return n.text(); }).join("");
   }),
 };
 """, tmp_path)
@@ -1229,7 +1225,7 @@ var answer = {
     assert answer["kinds"] == ["通常", "通常", "通常"]
     assert answer["total"] == answer["before"]["total"]        # 3点 300円のまま
     assert answer["saved"] == ["1:通常", "1:通常", "1:通常"]
-    assert answer["splits"] == 0        # 1点になったので「ばらす」は消える
+    assert answer["splits"] == 3        # 「ばらす」は常に出す（資料どおり。1点では何もしない）
 
 
 @needs_jsc
@@ -1345,12 +1341,13 @@ var answer = { bets: SENT[SENT.length - 1].bets,
 
 @needs_jsc
 def test_there_is_nothing_to_refresh_without_a_slip(script, tmp_path):
-    """買い目が空のときは、そのボタンを出さない。"""
+    """買い目が空のときも、ボタンは出すが押せない（資料どおり常に出す）。"""
     answer = run_component(script, OPEN + """
-var answer = { buttons: NODES.slip.findAll(function (c) {
-  return c.tagName === "button" && c.text().indexOf("買い目の券種を更新") === 0; }).length };
+var found = NODES.slip.findAll(function (c) {
+  return c.tagName === "button" && c.text().indexOf("買い目の券種を更新") === 0; });
+var answer = { buttons: found.length, disabled: found[0] && found[0].attrs.disabled === "disabled" };
 """, tmp_path)
-    assert answer["buttons"] == 0
+    assert answer == {"buttons": 1, "disabled": True}
 
 
 # --- 馬名 → 馬柱のその馬 ---------------------------------------------------------
@@ -1493,5 +1490,7 @@ var answer = { sent: SENT.map(function (v) { return v.kind; }), bets: SENT[0] &&
 
 @needs_jsc
 def test_the_phone_pill_is_short(script, tmp_path):
-    answer = _pill(script, tmp_path, layout="phone", scenario="var answer = { text: pill().text() };")
-    assert answer["text"] == "↻ 取り込む"
+    """スマホは資料どおり丸い ↻ だけ（説明は title と aria-label に）。"""
+    answer = _pill(script, tmp_path, layout="phone",
+                   scenario="var answer = { text: pill().text(), label: pill().attrs['aria-label'] };")
+    assert answer == {"text": "↻", "label": "↻ 全券種を取り込む（約21秒）"}
