@@ -563,3 +563,24 @@ def test_phone_markers_do_not_overlap_on_the_phone_board():
             if abs(a["position"] - b["position"]) < need:
                 bad.append((a["horse_id"], b["horse_id"]))
     assert bad == [] or len({m["lane_offset"] for m in markers}) == board.MAX_LANE_ROWS
+
+
+# --- 段×脚質のカード型（2026-10） ---------------------------------------------------------
+
+
+def test_positions_map_to_four_running_style_columns():
+    from keiba_analysis.racing.board import COLUMN_CENTERS, column_of
+    assert [column_of(p) for p in (0.9, 0.75, 0.6, 0.5, 0.3, 0.25, 0.1, None)] == [0, 0, 1, 1, 2, 2, 3, 2]
+    assert [column_of(c) for c in COLUMN_CENTERS] == [0, 1, 2, 3]       # 保存した中心は同じ列に戻る
+
+
+def test_order_within_a_column_keeps_hand_placed_horses_between_others():
+    from keiba_analysis.racing.board import _assign_order
+    markers = [
+        {"horse_id": "a", "umaban": 1, "tier": "B", "column": 1, "position": 0.6, "is_manual": False, "lane_offset": None},
+        {"horse_id": "b", "umaban": 2, "tier": "B", "column": 1, "position": 0.7, "is_manual": False, "lane_offset": None},
+        {"horse_id": "c", "umaban": 3, "tier": "B", "column": 1, "position": 0.625, "is_manual": True, "lane_offset": 0.5},
+    ]
+    _assign_order(markers)
+    order = {m["horse_id"]: m["order"] for m in markers}
+    assert order == {"b": 0.0, "a": 1.0, "c": 0.5}        # 前の馬が上、動かした馬は間に入る

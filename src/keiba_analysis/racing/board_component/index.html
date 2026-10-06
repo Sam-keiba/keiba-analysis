@@ -3,26 +3,29 @@
 <head>
 <meta charset="utf-8" />
 <!--
-  予想ボード（Tier × 隊列ポジション）のドラッグできる盤。
+  予想ボード（段 A〜D × 脚質の4列）のドラッグできる盤（2026-10 の資料 競馬新聞.dc.html / Mobile.dc.html）。
+
+  - 段ごとに白い角丸カード（左に段の色帯と段名）。D はカードが薄い灰で、馬は半透明＋グレースケール
+  - 段の中は脚質の4列。**右から 逃げ・先行・差し・追込**（右が前）。列の中は縦に並び、上ほど前
+  - 馬をドラッグして段と列を動かす。落とした場所で列の中の位置が決まる。動かした馬は緑の枠
+  - 馬を押す（動かさない）と、同じページの馬柱のその馬の行へ飛ぶ
+
+  保存の形は前の盤と同じ（board_horses / 共有ストアの board）。列は position の4区分（列の中心の値）、
+  列の中の並び順は lane_offset に入れる（board.py の COLUMN_CENTERS / _assign_order）。
 
   Streamlitのカスタムコンポーネントの約束ごと（componentReady / render /
-  setComponentValue / setFrameHeight の4つのメッセージ）だけを使っていて、
-  npmもビルドも要らない素のHTML+JS。
-
-  大事な点: **ドラッグ中はStreamlitへ何も送らない**。値を返すのは「保存」を
-  押したときだけで、そのときだけ画面が再描画される（以前の予想印が、押すたびに
-  再実行されて辛かったのと同じことを繰り返さないため）。
+  setComponentValue / setFrameHeight の4つのメッセージ）だけを使う。npmもビルドも要らない。
+  **ドラッグ中はStreamlitへ何も送らない**。離したときだけ保存を送る（自動保存）。
 -->
 <style>
-  /* 競馬新聞のフォント（@importは<style>の先頭でないと効かない） */
   @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
   :root {
-    --line: #d7d3d3;
-    --ink: #201e1d;
-    --muted: #7d7979;
+    --ink: #201f1d;
+    --muted: #6b6865;
+    --line: #d4d1d0;
     --accent: #1a7f4b;
-    /* 段の色。1色の濃淡にして「上ほど強い」が色の濃さで分かるようにする。
-       馬番の枠色（赤・青・黄…）と喧嘩しないよう、盤側は緑の1系統に寄せている。 */
+    --accent-100: #e6f3ec;
+    --accent-300: #9acbb0;
     --tier-a: #0e6b3a;
     --tier-b: #2f9b62;
     --tier-c: #86c6a4;
@@ -32,292 +35,107 @@
   body {
     margin: 0; color: var(--ink); background: transparent;
     font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    -webkit-tap-highlight-color: transparent;
   }
-  /* 盤: 白い角丸カード＋影（2026-10 の新デザイン） */
-  .board {
-    border: none; border-radius: 18px; overflow: hidden;
-    background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.1);
-  }
-  /* 段の背景は**塗らない**。全面にパステルを敷くと、主役の馬が沈む。
-     段の見分けは左端の色帯だけに任せる。 */
-  .lane { position: relative; border-bottom: 1px solid var(--line); }
-  .lane:last-child { border-bottom: none; background: #f8f4f4; }   /* D段（消し）だけ薄い灰色 */
-  /* 左端の色帯 */
-  .lane::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px;
-  }
-  .lane[data-tier="A"]::before { background: var(--tier-a); }
-  .lane[data-tier="B"]::before { background: var(--tier-b); }
-  .lane[data-tier="C"]::before { background: var(--tier-c); }
-  .lane[data-tier="D"]::before { background: var(--tier-d); }
-  .lane-head {
-    position: absolute; left: 0; top: 0; bottom: 0;
-    display: flex; align-items: center; justify-content: flex-start; padding: 0 0 0 32px;
-    white-space: nowrap; pointer-events: none;
-  }
-  /* 段の見出しは英字だけ。段の色をそのまま文字に使って、左の色帯と対応づける。
-     「軸」「相手」といった意味は、見出しのツールチップと盤の下の1行に置いてある。 */
-  .lane-key { font: 900 38px/1 'Archivo', 'Noto Sans JP', sans-serif; letter-spacing: .02em; }
-  .lane[data-tier="A"] .lane-key { color: var(--tier-a); }
-  .lane[data-tier="B"] .lane-key { color: var(--tier-b); }
-  .lane[data-tier="C"] .lane-key { color: var(--tier-c); }
-  .lane[data-tier="D"] .lane-key { color: var(--tier-d); }
-  .lane-field { position: absolute; right: 0; top: 0; bottom: 0; }
-  /* 空の段。段の高さは全段そろえてあるので（下記）、空だとぽっかり空く。
-     「今日はこの段に該当がいない」と伝えて、余白を情報に変える。 */
-  .lane-empty {
-    position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
-    text-align: center; font-size: 12px; color: #9b9797; letter-spacing: .08em;
-  }
-  /* --- 馬（主役） --- */
-  .marker {
-    position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center;
-    gap: 8px; padding: 5px 14px 5px 6px; height: 36px; border-radius: 999px; cursor: grab;
-    background: #fff; border: 2px solid #d4d1d0; box-shadow: 0 1px 4px rgba(0,0,0,.12); white-space: nowrap;
-    touch-action: none; user-select: none;
-    transition: box-shadow .12s ease, transform .12s ease;
-  }
-  .marker:hover { background: #f8f4f4; }
-  .marker.dragging {
-    cursor: grabbing; box-shadow: 0 6px 16px rgba(32,30,29,.24); z-index: 5;
-  }
-  .marker.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .marker.unknown { border-style: dashed; }
-  /* 落とした馬。その場に残したまま、台紙と名前だけ落とす。
-     - `.excluded` … 丸を押して消した馬（保存される）
-     - `.dim`      … D段（＝消し）にいる馬。段から毎回決まるので保存しない
-     この2つは**同じ見た目**にする（Dはすでに消しなので、見分ける必要がない）。
-     **丸（馬番）には何も当てない**（枠色のままで、どの馬かが分かるように） */
-  .marker.excluded, .marker.dim { background: #fff; border-color: #bab6b6; box-shadow: none; }
-  .marker.excluded .name, .marker.dim .name { color: #9b9797; }
-  /* 手で動かした馬の黒い太枠は、灰色になっても残す。
-     D段がほぼ全部灰色になるので、ここが負けると「どれを自分で動かしたか」が分からなくなる。
-     **`.excluded` / `.dim` より後ろに置くこと**（同じ強さなら後ろが勝つ）。 */
-  .marker.manual { border-color: var(--accent); border-width: 3px; padding: 4px 13px 4px 5px; }
-  .dot {
-    width: 22px; height: 22px; border-radius: 50%; display: inline-flex;
-    align-items: center; justify-content: center; font-size: 12px; font-weight: 900;
-    border: 2px solid var(--ink);
-  }
-  /* 馬名の大きさは **board.MARKER_CHAR_PX と同じ値**にすること。
-     Python側はこの値で「全角1文字ぶん」を見積もって段を決めている。
-     片方だけ変えると、盤が縮まないか（見積もりが大きいまま）、
-     馬が重なる（見積もりが小さすぎる）。 */
-  .name { font-size: 14px; font-weight: 900; letter-spacing: .01em; cursor: pointer; }
-  .name:hover { text-decoration: underline; }
-  /* コメントの✎。**絶対位置**にしてマーカーの幅を変えない
-     （幅は重なりの計算に使っているので、広げると馬が重なる）。
-     ふだんは隠し、マウスを乗せたときとコメントがある馬だけ出す。 */
-  .pen {
-    position: absolute; right: -4px; top: -8px; width: 15px; height: 15px; line-height: 14px;
-    border: 1px solid #c9cfc9; border-radius: 50%; background: #fff;
-    font-size: 10px; text-align: center; color: #6b716b; cursor: pointer;
-    opacity: 0; transition: opacity .12s;
-  }
-  .marker:hover .pen, .marker.has-comment .pen { opacity: 1; }
-  .marker.has-comment .pen { color: #0f6b3f; border-color: #9fc6b1; }
-  .pen:hover { color: #0f6b3f; border-color: #0f6b3f; }
-  /* 横軸。素の文字だけだと締まらないので、細いレールを1本渡す */
+  /* 「← 後 ／ 前 →」はボードの上に右寄せで1つだけ */
   .axis {
-    display: flex; align-items: center; gap: 8px; margin: 0 2px 6px;
-    font-size: 11px; color: var(--muted); letter-spacing: .04em;
+    display: flex; justify-content: flex-end; padding: 16px 18px 8px 0;
+    font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap;
   }
-  .axis .rail {
-    flex: 1; height: 1px;
-    background: #bab6b6;
+  .tier {
+    display: flex; margin-bottom: 12px; border-radius: 22px; overflow: hidden; background: #fff;
+    border-left: 8px solid var(--tier-a); box-shadow: 0 1px 6px rgba(0,0,0,.1); user-select: none;
   }
-  .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-  /* 保存ボタンは無い（触るたびに自動で保存する）。代わりに状態だけ小さく出す */
-  .status {
-    font-size: 12px; font-weight: 700; color: #0f5632; white-space: nowrap;
-    padding: 4px 12px; border-radius: 999px; background: #e6f3ec;
+  .tier[data-tier="B"] { border-left-color: var(--tier-b); }
+  .tier[data-tier="C"] { border-left-color: var(--tier-c); }
+  .tier[data-tier="D"] { border-left-color: var(--tier-d); background: #f8f4f4; }
+  .tier-in { flex: 1; min-width: 0; display: flex; gap: 20px; padding: 16px 20px 18px 24px; }
+  .tier-key { flex: none; width: 48px; font: 900 38px/1 'Archivo', sans-serif; color: var(--tier-a); }
+  .tier[data-tier="B"] .tier-key { color: var(--tier-b); }
+  .tier[data-tier="C"] .tier-key { color: var(--tier-c); }
+  .tier[data-tier="D"] .tier-key { color: var(--tier-d); }
+  /* 脚質の4列。row-reverse で、番号0（逃げ）が右端に来る */
+  .cols { flex: 1; min-width: 0; display: flex; flex-direction: row-reverse; gap: 10px; }
+  .col {
+    flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; gap: 6px;
+    border-radius: 14px; transition: background .1s;
   }
-  .status.idle { color: #0f5632; background: #e6f3ec; }
-  .hint { font-size: 11px; color: var(--muted); }
-  .editor {
-    margin-top: 8px; padding: 8px; border: none; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1);
-    background: #fff; display: none;
+  .col.over { background: var(--accent-100); }
+  /* 馬のチップ（ピル）。枠色の馬番の丸＋馬名 */
+  .chip {
+    display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 8px;
+    border-radius: 999px; background: #fff; border: 1px solid var(--line);
+    box-shadow: 0 1px 4px rgba(0,0,0,.18); cursor: grab; white-space: nowrap; overflow: hidden;
+    touch-action: none; user-select: none; -webkit-user-select: none;
   }
-  .editor.open { display: block; }
-  .editor-head { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
-  .editor-why { font-size: 11px; color: var(--muted); margin-bottom: 6px; line-height: 1.4; }
-  textarea {
-    width: 100%; min-height: 62px; border: 1.5px solid #d4d1d0; border-radius: 10px;
-    padding: 6px; font-family: inherit; font-size: 12px; resize: vertical;
+  .chip .num {
+    flex: none; width: 24px; height: 24px; border-radius: 999px; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 900; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
   }
-  /* --- スマホ（payload.layout = "phone"。board.PHONE の寸法と対で直すこと） --------------
-     マーカーは高さ28px・馬番は四角22px・馬名12px。縦持ちでは盤を90度回して横長に出す
-     （iPhoneのSafariは画面の向きを固定できないため）。 */
-  #root { position: relative; }
-  body.phone .lane-head { padding: 0 0 0 14px; }
-  body.phone .lane-key { font-size: 22px; }
-  body.phone .marker {
-    gap: 6px; padding: 2px 8px 2px 3px; height: 28px; border-width: 2px;
+  .chip .name { min-width: 0; font-size: 14px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; }
+  .chip.manual { border: 2px solid var(--accent-300); }
+  /* D段（＝消し）にいる馬と、前の盤で消した馬は、半透明＋グレースケール */
+  .chip.dim { opacity: .5; filter: grayscale(1); }
+  .chip.dim .name { color: var(--muted); }
+  .chip.lifted { opacity: .3; }
+  .chip.flash { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .ghost {
+    position: fixed; z-index: 10; pointer-events: none; transform: translate(-50%, -50%);
+    box-shadow: 0 8px 24px rgba(0,0,0,.3); border: 2px solid var(--accent); background: var(--accent-100);
   }
-  body.phone .marker.manual { border-width: 3px; padding: 1px 7px 1px 2px; }
-  body.phone .dot { width: 22px; height: 22px; border-radius: 0; border-width: 1px; font-size: 11px; }
-  body.phone .name { font-size: 12px; }
-  body.phone .pen { display: none; }           /* 指では✎が押しにくいので、コメントはPCで書く */
-  body.phone .hint { display: none; }
-  body.phone .axis { margin-bottom: 4px; font-size: 10px; }
-  body.phone .toolbar { margin-top: 6px; }
-  body.phone.rotated { overflow: hidden; }
-  body.phone.rotated #root {
-    position: absolute; top: 0; left: 0; transform-origin: top left;
+
+  /* --- スマホ（payload.layout = "phone"。Mobile.dc.html の縦持ちのカード） --------------------- */
+  body.phone .axis { padding: 12px 10px 6px 0; font-size: 11px; }
+  body.phone .tier { margin-bottom: 10px; border-radius: 18px; border-left-width: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  body.phone .tier-in { display: block; padding: 10px 8px 12px 10px; }
+  body.phone .tier-key { width: auto; font-size: 24px; }
+  body.phone .cols { gap: 3px; margin-top: 10px; }
+  body.phone .col { gap: 4px; }
+  body.phone .chip { height: auto; min-height: 30px; gap: 2px; padding: 3px; border-radius: 15px; overflow: hidden; }
+  body.phone .chip .num { width: 17px; height: 17px; font-size: 8.5px; }
+  /* 馬名は1行に収める（8文字は横97%、9文字以上は横92%に縮める。palt で字間を詰める） */
+  body.phone .chip .name {
+    font-size: 10px; line-height: 1.15; letter-spacing: -.03em; font-feature-settings: 'palt';
+    transform-origin: left center; overflow: visible; text-overflow: clip;
   }
-  /* --- スマホの新デザイン（2026-10。docs/design_handoff/競馬新聞 Mobile.dc.html） ----------------
-     盤は白い角丸カード＋影、段は左に6pxの色帯、馬はピル型のチップ。
-     マーカーの高さ・余白・字の大きさは変えない（board.PHONE の幅の見積もりと対のため）。 */
-  body.phone .board {
-    border: none; border-radius: 18px; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.1);
-  }
-  body.phone .lane::before { width: 6px; }
-  body.phone .lane:last-child { background: #f8f4f4; }
-  body.phone .lane-key { font-size: 20px; }
-  body.phone .marker {
-    border-radius: 999px; border: 1.5px solid #d4d1d0; box-shadow: 0 1px 4px rgba(0,0,0,.12);
-  }
-  body.phone .marker.excluded, body.phone .marker.dim { box-shadow: none; }
-  body.phone .marker.manual { border: 2px solid var(--accent); }
-  body.phone .dot { border-radius: 7px; }
-  body.phone .status {
-    border-radius: 999px; background: #e6f3ec; color: #0f5632; font-size: 10px; padding: 4px 10px;
-  }
-  /* 馬柱の枠から飛んできた馬（2.4秒だけ光らせる。馬名→馬柱の pg-jumped と同じ長さ） */
-  .marker.flash { outline: 3px solid var(--accent); outline-offset: 3px; z-index: 6; }
 </style>
 </head>
 <body>
 <div id="root">
-  <div class="axis">
-    <span id="axis-left"></span><span class="rail"></span><span id="axis-right"></span>
-  </div>
-  <div class="board" id="board"></div>
-  <div class="toolbar">
-    <span class="status idle" id="status">自動で保存されます</span>
-    <span class="hint" id="hint">ドラッグで動かし、丸を押すと消す／戻す、馬名を押すと下の馬柱へ、✎でコメント。</span>
-  </div>
-  <div class="editor" id="editor">
-    <div class="editor-head" id="editor-head"></div>
-    <div class="editor-why" id="editor-why"></div>
-    <textarea id="comment" placeholder="この馬についてのメモ"></textarea>
-  </div>
+  <div class="axis">← 後 ／ 前 →</div>
+  <div id="board"></div>
 </div>
 <script>
 (function () {
-  const DEFAULT_LANE_HEIGHT = 170;
-  // 見出しの列の幅。Python側（board.LANE_HEAD_PX）が唯一の出どころで、
-  // 馬を置ける幅の見積もり（重なり計算）と必ず同じ値になる。
-  const DEFAULT_LANE_HEAD = 110;
-  // これだけ動かして初めて「ドラッグ」と見なす。丸を押すときに指が1pxぶれただけで
-  // 「手で置いた」扱いになると、その馬が引き伸ばしの対象から外れて位置が固定される。
+  "use strict";
+  // これだけ動かして初めて「ドラッグ」と見なす（押しただけのつもりを守る）
   const DRAG_THRESHOLD_PX = 4;
-  let laneHeight = DEFAULT_LANE_HEIGHT;   // 段をいくつ使うかで変わる（Python側が決める）
-  let laneHead = DEFAULT_LANE_HEAD;
+  const DEFAULT_CENTERS = [0.875, 0.625, 0.375, 0.125];
   let markers = [];
   let lanes = [];
-  let selected = null;
+  let columns = ["逃げ", "先行", "差し", "追込"];
+  let centers = DEFAULT_CENTERS;
   let raceId = null;           // 馬柱のどの行を探すか（別のレースへ飛ばさないための目印）
   let waitingSave = false;     // 送った保存が返ってくるのを待っている
-  let commentTimer = null;     // コメントの打ち終わりを待つタイマー
-  const COMMENT_DELAY_MS = 600;
   let appliedVersion = null;   // 最後に描いた中身の符号（同じなら描き直さない）
   let appliedRev = -1;         // 最後に描いたときの番号（これ以下の描画は古いので捨てる）
-  // スマホ（payload.layout = "phone"）。縦持ちのときは盤を90度回して横長に出す
   let phone = false;
-  let rotated = false;
-  let rotateScale = 1;          // 回した盤が画面の幅に収まらないときに縮める倍率
-  let reservePx = 0;            // 画面の高さのうち、盤に使えない分（ヘッダー・タブバー等）
 
   function send(type, data) {
-    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, data), "*");
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
   }
   function setHeight() {
-    if (rotated) {
-      send("streamlit:setFrameHeight", { height: frameHeight() });
-      return;
-    }
     send("streamlit:setFrameHeight", { height: document.getElementById("root").scrollHeight + 8 });
   }
-
   /** body の目印を付け外しする（テスト用の最小のDOMには body が無いので確かめてから）。 */
   function bodyClass(name, on) {
     const body = document.body;
     if (body && body.classList && body.classList.toggle) body.classList.toggle(name, !!on);
   }
 
-  /** スマホで盤に使える高さ（画面の高さ − ヘッダー・タブバーなど）。 */
-  function frameHeight() {
-    let total = 640;
-    try { total = window.parent.innerHeight || total; } catch (e) { /* 親が読めないときは控えの値 */ }
-    return Math.max(320, total - reservePx);
-  }
-
-  /** 縦持ちか（親の画面で見る。iframeの中の幅は盤の幅なので当てにならない）。 */
-  function isPortrait() {
-    try { return window.parent.innerHeight > window.parent.innerWidth; } catch (e) { return false; }
-  }
-
-  /**
-   * スマホの縦持ちでは、盤（#root）を90度回して横長に出す。
-   * 回したあとの「縦」は画面の高さ、「横」は画面の幅（iframeの幅）に収める。
-   */
-  function applyRotation() {
-    const root = document.getElementById("root");
-    rotated = phone && isPortrait();
-    bodyClass("rotated", rotated);
-    if (!rotated) {
-      root.style.width = "";
-      root.style.transform = "";
-      rotateScale = 1;
-      return;
-    }
-    const height = frameHeight();               // 回したあとの縦＝盤の横幅
-    const width = window.innerWidth || 360;     // 回したあとの横＝盤の高さ
-    root.style.width = height + "px";
-    const content = root.scrollHeight || width;
-    rotateScale = Math.min(1, width / content);
-    root.style.width = (height / rotateScale) + "px";
-    root.style.transform = "translateX(" + width + "px) rotate(90deg) scale(" + rotateScale + ")";
-  }
-
-  /**
-   * 押した位置を、要素 `el` の中の（回す前の）座標に直す。`{x, y, w, h}`。
-   * 回していないときは getBoundingClientRect そのまま（今までと同じ計算）。
-   * 回しているときは、画面の座標を回転と縮小の逆で戻し、盤の中の位置（offset）と比べる。
-   */
-  function pointIn(event, el) {
-    if (!rotated) {
-      const r = el.getBoundingClientRect();
-      return { x: event.clientX - r.left, y: event.clientY - r.top, w: r.width, h: r.height };
-    }
-    const root = document.getElementById("root");
-    const width = window.innerWidth || 360;
-    const u = event.clientY / rotateScale;               // 回す前の横（盤の左から）
-    const v = (width - event.clientX) / rotateScale;     // 回す前の縦（盤の上から）
-    let left = 0, top = 0, node = el;
-    while (node && node !== root) {
-      left += (node.offsetLeft || 0) + (node.clientLeft || 0);
-      top += (node.offsetTop || 0) + (node.clientTop || 0);
-      node = node.offsetParent;
-    }
-    return { x: u - left, y: v - top, w: el.offsetWidth, h: el.offsetHeight };
-  }
-  function setStatus(text, idle) {
-    const el = document.getElementById("status");
-    el.textContent = text;
-    el.classList.toggle("idle", !!idle);
-  }
-
-  /**
-   * 盤の中身をStreamlitへ送って保存する（**自動保存**。保存ボタンは無い）。
-   *
-   * ドラッグの終わり・丸で消す／戻す・コメント（打ち終わりとフォーカスが外れたとき）
-   * から呼ぶ。1文字ごとには送らない。
-   */
+  /** 盤の中身をStreamlitへ送って保存する（**自動保存**。保存ボタンは無い）。 */
   function save() {
     waitingSave = true;
-    setStatus("保存中…");
     send("streamlit:setComponentValue", {
       value: {
         saved_at: Date.now(),      // 同じ中身でも「保存された」ことが分かるように
@@ -333,199 +151,203 @@
     });
   }
 
-  /** コメントは打ち終わってから送る（1文字ごとに保存しない）。 */
-  function saveCommentLater() {
-    if (commentTimer) clearTimeout(commentTimer);
-    commentTimer = setTimeout(function () { commentTimer = null; save(); }, COMMENT_DELAY_MS);
-  }
-  function saveCommentNow() {
-    if (!commentTimer) return;      // 変えていなければ送らない
-    clearTimeout(commentTimer);
-    commentTimer = null;
-    save();
-  }
+  // --- 描く --------------------------------------------------------------------
 
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  function inCell(tier, column) {
+    return markers.filter(function (m) { return m.tier === tier && m.column === column; })
+      .sort(function (a, b) { return (a.order - b.order) || ((a.umaban || 0) - (b.umaban || 0)); });
+  }
   function draw() {
     const board = document.getElementById("board");
     board.innerHTML = "";
     lanes.forEach(function (lane) {
-      const el = document.createElement("div");
-      el.className = "lane";
-      el.dataset.tier = lane.key;
-      el.style.height = laneHeight + "px";
-      el.innerHTML =
-        '<div class="lane-head"><span class="lane-key"></span></div>' +
-        '<div class="lane-field"></div>';
-      el.querySelector(".lane-key").textContent = lane.key;
-      // 長い説明は見出しに書くと折り返して窮屈になるので、マウスを乗せたときだけ出す
-      el.querySelector(".lane-head").title = lane.key + " " + lane.label + "：" + lane.meaning;
-      el.querySelector(".lane-head").style.width = laneHead + "px";
-      el.querySelector(".lane-field").style.left = laneHead + "px";
-      board.appendChild(el);
+      const tier = el("div", "tier");
+      tier.dataset.tier = lane.key;
+      const inner = el("div", "tier-in");
+      const key = el("b", "tier-key", lane.key);
+      key.title = lane.key + " " + lane.label + "：" + lane.meaning;
+      inner.appendChild(key);
+      const cols = el("div", "cols");
+      for (let c = 0; c < columns.length; c++) {
+        const col = el("div", "col");
+        col.dataset.col = String(c);
+        col.dataset.tier = lane.key;
+        col.title = columns[c];
+        inCell(lane.key, c).forEach(function (marker) { col.appendChild(chip(marker)); });
+        cols.appendChild(col);
+      }
+      inner.appendChild(cols);
+      tier.appendChild(inner);
+      board.appendChild(tier);
     });
-    // スマホの縦持ちは、馬を置く前に盤を回して横幅を決める（馬の位置は盤の幅で測るため）
-    applyRotation();
-    markers.forEach(drawMarker);
-    // 段の高さは全段そろえている（ドラッグの当たり判定が割り算1つで済むうえ、
-    // 空の段に馬を落としたときに段が伸びて他の馬が縦にずれるのを防げる）。
-    // そのぶん空の段はぽっかり空くので、そこに「該当なし」と出しておく。
-    lanes.forEach(function (lane) {
-      const field = fieldOf(lane.key);
-      if (!field || field.children.length) return;
-      const note = document.createElement("div");
-      note.className = "lane-empty";
-      note.textContent = "該当なし";
-      field.appendChild(note);
-    });
+    if (phone) {
+      fitNames();
+      // 日本語の字体（Noto Sans JP）が読み込まれると字の幅が変わるので、読み込み後にもう一度測る
+      try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitNames); } catch (e) { /* 無くてもよい */ }
+      setTimeout(fitNames, 400);
+    }
     setHeight();
   }
-
-  function fieldOf(tier) {
-    const lane = document.querySelector('.lane[data-tier="' + tier + '"]');
-    return lane ? lane.querySelector(".lane-field") : null;
-  }
-
-  function drawMarker(marker) {
-    const field = fieldOf(marker.tier);
-    if (!field) return;
-    const el = document.createElement("div");
-    el.className = "marker" + (marker.is_manual ? " manual" : "") +
-      (marker.has_position ? "" : " unknown");
-    el.title = (marker.style ? "脚質 " + marker.style + "／" : "") + marker.explanation +
-      (marker.has_position ? "" : "\n（通過順位が無いため、横の位置は仮の中央）");
-    el.innerHTML = '<span class="dot"></span><span class="name"></span>'
-      + '<span class="pen" title="コメントを書く">✎</span>';
-    const dot = el.querySelector(".dot");
-    dot.textContent = marker.umaban == null ? "?" : marker.umaban;
-    dot.style.background = marker.color;
-    dot.style.color = marker.text_color;
-    const name = el.querySelector(".name");
-    name.textContent = marker.horse_name;
-    name.title = "下の馬柱のこの馬へ飛ぶ";
-    // コメントがある馬は✎を出したままにする（マーカー側に印を付ける）
-    if (marker.comment) el.classList.add("has-comment");
-    el.style.left = (marker.position * 100) + "%";
-    el.style.top = (marker.lane_offset * 100) + "%";
-    marker.el = el;
-    el.addEventListener("pointerdown", function (event) { startDrag(event, marker); });
-    applyLook(marker);
-    field.appendChild(el);
-    keepInside(el, field);
-  }
-
   /**
-   * 馬の見た目（落としてあるかどうか）を決める。**ここ1か所だけ**で決める。
-   *
-   * - `excluded` … 丸を押して消した馬。保存される
-   * - `dim`      … D段（＝消し）にいる馬。**段から毎回決まる**ので保存しない
-   *
-   * 描くときだけでなく、**ドラッグで段が変わったとき**にも呼ぶこと。
-   * 呼ばないと、CからDへ落としても白地のまま、DからCへ上げても灰色のままになる。
+   * スマホで、列の幅に入らない馬名を横に縮めて1行に収める（隣の列にはみ出さないように）。
+   * 縮めすぎると読めないので 60% までにする。幅を測れない環境（テストの最小のDOM）では何もしない。
+   * 列は約80px、馬番の丸を除くと馬名に使えるのは約54px。9文字の馬名は92%でも約70pxあるので、
+   * 資料の 97%／92% だけでは隣の列にはみ出していた（2026-10）。
    */
+  function fitNames() {
+    document.querySelectorAll(".chip").forEach(function (node) {
+      const name = node.querySelector(".name");
+      const num = node.querySelector(".num");
+      if (!name || !name.scrollWidth || !node.clientWidth) return;
+      // 馬名に使える幅＝チップの内側の幅 − 左右の余白（3px×2）− 馬番の丸 − すき間（2px）
+      const room = node.clientWidth - 6 - (num ? num.offsetWidth : 0) - 2;
+      const scale = room / name.scrollWidth;
+      const now = parseFloat((name.style.transform || "").replace(/[^\d.]/g, "")) || 1;
+      if (scale < now) name.style.transform = "scaleX(" + Math.max(0.6, Math.floor(scale * 100) / 100) + ")";
+    });
+  }
+  function chip(marker) {
+    const node = el("div", "chip");
+    node.dataset.horse = marker.horse_id;
+    const num = el("span", "num", marker.umaban == null ? "?" : String(marker.umaban));
+    num.style.background = marker.color;
+    num.style.color = marker.text_color;
+    node.appendChild(num);
+    const name = el("span", "name", marker.horse_name);
+    // スマホは馬名を1行に収める（8文字は横97%、9文字以上は横92%。資料）。
+    // それでも列の幅に入らない名前は、描いたあとに fitNames が収まるまで縮める
+    const length = (marker.horse_name || "").length;
+    if (phone && length >= 8) name.style.transform = "scaleX(" + (length >= 9 ? 0.92 : 0.97) + ")";
+    node.appendChild(name);
+    node.title = (marker.style ? "脚質 " + marker.style + "／" : "") + (marker.explanation || "");
+    marker.el = node;
+    applyLook(marker);
+    node.addEventListener("pointerdown", function (event) { startDrag(event, marker); });
+    return node;
+  }
+  /** 馬の見た目（動かしたか・D段か）。**ここ1か所だけ**で決める。 */
   function applyLook(marker) {
     if (!marker.el) return;
-    marker.el.classList.toggle("excluded", !!marker.is_excluded);
-    marker.el.classList.toggle("dim", marker.tier === "D");
+    marker.el.classList.toggle("manual", !!marker.is_manual && marker.tier !== "D");
+    marker.el.classList.toggle("dim", marker.tier === "D" || !!marker.is_excluded);
   }
 
-  /**
-   * 馬が盤の外へはみ出さないように、**見た目だけ**内側へ寄せる。
-   *
-   * 馬は position を中心に置く（translate -50%）ので、端の馬は幅の半分だけ外へ出る。
-   * 幅は馬名の長さで変わり、ブラウザでしか測れないので、描いたあとに直す。
-   * marker.position（保存する値）は**動かさない**。動かすと、開くたびに少しずつ
-   * 内側へ寄っていってしまう。
-   */
-  function keepInside(el, field) {
-    const half = el.offsetWidth / 2;
-    const width = field.clientWidth;
-    if (!half || !width) return;
-    const center = (parseFloat(el.style.left) / 100) * width;
-    const clamped = Math.min(Math.max(center, half + 2), width - half - 2);
-    if (Math.abs(clamped - center) > 0.5) el.style.left = clamped + "px";
-  }
+  // --- ドラッグ ------------------------------------------------------------------
 
+  function inside(rect, x, y) {
+    return x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height;
+  }
+  /** 指（ポインター）の下にある列。段のカードの中で列のすき間に落としたときは、横にいちばん近い列。 */
+  function columnAt(x, y) {
+    const cols = document.querySelectorAll(".col");
+    for (let i = 0; i < cols.length; i++) {
+      if (inside(cols[i].getBoundingClientRect(), x, y)) return cols[i];
+    }
+    const tiers = document.querySelectorAll(".tier");
+    for (let t = 0; t < tiers.length; t++) {
+      if (!inside(tiers[t].getBoundingClientRect(), x, y)) continue;
+      let best = null, gap = Infinity;
+      tiers[t].querySelectorAll(".col").forEach(function (col) {
+        const r = col.getBoundingClientRect();
+        const d = Math.abs(x - (r.left + r.width / 2));
+        if (d < gap) { gap = d; best = col; }
+      });
+      return best;
+    }
+    return null;
+  }
+  /** 列の中で、何番目に入れるか（その列の馬の縦の真ん中と比べる）。 */
+  function insertIndex(col, y, self) {
+    const chips = Array.prototype.filter.call(col.children || [], function (c) {
+      return c !== self && c.className && c.className.indexOf("chip") === 0;
+    });
+    for (let i = 0; i < chips.length; i++) {
+      const r = chips[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return i;
+    }
+    return chips.length;
+  }
+  /** 落とした列と位置に合わせて、段・列・並び順を書き換える（前後の馬の順番は変えない）。 */
+  function placeAt(marker, tier, column, index) {
+    const others = inCell(tier, column).filter(function (m) { return m !== marker; });
+    let order;
+    if (!others.length) order = 0;
+    else if (index <= 0) order = others[0].order - 1;
+    else if (index >= others.length) order = others[others.length - 1].order + 1;
+    else order = (others[index - 1].order + others[index].order) / 2;
+    marker.tier = tier;
+    marker.column = column;
+    marker.order = Math.round(order * 1000) / 1000;
+    marker.position = centers[column];
+    marker.lane_offset = marker.order;
+    marker.is_manual = true;
+  }
   function startDrag(event, marker) {
-    event.preventDefault();
-    // どこから押し始めたか。動かさずに離したときの行き先を分ける
-    // （丸＝消す／戻す、✎＝コメント、それ以外（馬名）＝下の馬柱へ）
-    const from = event.target.closest ? event.target : null;
-    const onDot = !!(from && from.closest(".dot"));
-    const onPen = !!(from && from.closest(".pen"));
-    const el = marker.el;
-    el.setPointerCapture(event.pointerId);
-    let moved = false;
+    if (event.preventDefault) event.preventDefault();
+    const node = marker.el;
+    if (node.setPointerCapture) node.setPointerCapture(event.pointerId);
     const startX = event.clientX, startY = event.clientY;
+    let moved = false, ghost = null, over = null;
 
-    function onMove(moveEvent) {
+    function onMove(e) {
       if (!moved) {
-        // 押し始めから数px離れるまではドラッグにしない（押しただけのつもりを守る）
-        const dx = moveEvent.clientX - startX, dy = moveEvent.clientY - startY;
-        if (Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
+        if (Math.abs(e.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(e.clientY - startY) < DRAG_THRESHOLD_PX) return;
         moved = true;
-        el.classList.add("dragging");
+        node.classList.add("lifted");
+        if (document.body && node.cloneNode) {
+          ghost = node.cloneNode(true);
+          ghost.classList.add("ghost");
+          document.body.appendChild(ghost);
+        }
       }
-      // 盤の中の位置（スマホの縦持ちで盤を回しているときは、回転を戻して測る）
-      const onBoard = pointIn(moveEvent, document.getElementById("board"));
-      const onField = pointIn(moveEvent, el.parentElement);
-      const x = Math.min(1, Math.max(0, onField.x / onField.w));
-      // 縦はレーンをまたいで動かせる（Tierを変える操作そのもの）
-      const index = Math.min(lanes.length - 1, Math.max(0,
-        Math.floor(onBoard.y / laneHeight)));
-      const tier = lanes[index].key;
-      const offset = Math.min(0.92, Math.max(0.08, (onBoard.y - index * laneHeight) / laneHeight));
-      marker.position = Math.round(x * 1000) / 1000;
-      marker.lane_offset = Math.round(offset * 1000) / 1000;
-      if (tier !== marker.tier) {
-        marker.tier = tier;
-        fieldOf(tier).appendChild(el);
-        applyLook(marker);   // D段に入った／出たら、その場で灰色にする／戻す
+      if (ghost) { ghost.style.left = e.clientX + "px"; ghost.style.top = e.clientY + "px"; }
+      const col = columnAt(e.clientX, e.clientY);
+      if (col !== over) {
+        if (over) over.classList.remove("over");
+        if (col) col.classList.add("over");
+        over = col;
       }
-      el.style.left = (marker.position * 100) + "%";
-      el.style.top = (marker.lane_offset * 100) + "%";
+      node.dataset.dropX = String(e.clientX);
+      node.dataset.dropY = String(e.clientY);
     }
-
     function onUp() {
-      el.classList.remove("dragging");
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      if (moved) {
-        marker.is_manual = true;
-        el.classList.add("manual");
-        save();                     // 動かし終わったら自動で保存
-      } else if (onDot) {
-        toggleExcluded(marker);     // 丸を押す → 消す／戻す
-      } else if (onPen) {
-        select(marker);             // ✎を押す → コメント欄
-      } else {
-        jumpToGrid(marker);         // 馬名を押す → 下の馬柱のその馬へ
-      }
+      node.removeEventListener("pointermove", onMove);
+      node.removeEventListener("pointerup", onUp);
+      node.removeEventListener("pointercancel", onUp);
+      node.classList.remove("lifted");
+      if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      if (over) over.classList.remove("over");
+      if (!moved) { jumpToGrid(marker); return; }       // 押しただけ → 馬柱のその馬へ
+      if (!over) return;                                 // 盤の外で離した → 元のまま
+      const y = parseFloat(node.dataset.dropY);
+      placeAt(marker, over.dataset.tier, parseInt(over.dataset.col, 10), insertIndex(over, y, node));
+      draw();
+      save();                                            // 動かし終わったら自動で保存
     }
-
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
+    node.addEventListener("pointermove", onMove);
+    node.addEventListener("pointerup", onUp);
+    node.addEventListener("pointercancel", onUp);
   }
 
-  function toggleExcluded(marker) {
-    marker.is_excluded = !marker.is_excluded;
-    applyLook(marker);
-    save();
-  }
+  // --- 馬柱との行き来 --------------------------------------------------------------
 
   /**
-   * 同じページの下にある**馬柱のその馬の行**へ飛ぶ（ページの外へは出ない）。
-   *
-   * 行のidには**レースIDが入っている**（`past_grid.grid_row_id`）。盤のレースIDと
-   * 合わない馬柱しか出ていなければ**見つからず、何もしない**。
-   * これが「別のレースへ飛んでしまう」事故を防ぐ要。
+   * 同じページの**馬柱のその馬の行**へ飛ぶ。行のidにはレースIDが入っている（`past_grid.grid_row_id`）ので、
+   * 盤のレースIDと合わない馬柱しか出ていなければ見つからず、何もしない（別のレースへ飛ばない）。
    */
   function jumpToGrid(marker) {
-    const doc = window.parent && window.parent.document;
+    let doc;
+    try { doc = window.parent && window.parent.document; } catch (e) { return; }
     if (!doc || !raceId || !marker.horse_id) return;
     const row = doc.getElementById("pg-" + raceId + "-" + marker.horse_id);
     if (!row) return;
-    // 馬柱のタブが閉じている（予想ボードやオッズを見ている）ときは、先にタブを開く。
-    // 
+    // 馬柱のタブが閉じている（予想やオッズを見ている）ときは、先にタブを開く
     let wait = 0;
     if (!row.offsetParent) {
       const tabs = doc.querySelectorAll('[data-testid="stTab"]');
@@ -539,16 +361,12 @@
       setTimeout(function () { row.classList.remove("pg-jumped"); }, 2400);
     }
     go();
-    // タブを開いた直後は表がまだ見えず位置がずれるので、表示されたあとにもう一度合わせる
     if (wait) setTimeout(function () { row.scrollIntoView({ behavior: "smooth", block: "center" }); }, wait);
   }
 
   /**
-   * 馬柱の**枠**（`.board-link`）を押したら、予想ボードのタブを開いてその馬を光らせる
-   * （馬名→馬柱 `jumpToGrid` の逆向き）。押された場所は親の画面なので、親に1つだけ受け口を付ける。
-   * 盤を描き直すたびに呼ばれるので、前に付けた受け口は外してから付け直す。
-   *
-   * `data-race` が盤のレースIDと違うときは何もしない（別のレースの馬を光らせない）。
+   * 馬柱の**枠**（`.board-link`）を押したら、予想のタブを開いてその馬を光らせる（jumpToGrid の逆向き）。
+   * `data-race` が盤のレースIDと違うときは何もしない。描き直すたびに受け口を付け直す。
    */
   function installBoardLinks() {
     let win, doc;
@@ -566,17 +384,14 @@
       const marker = markers.filter(function (m) { return m.horse_id === data.horse; })[0];
       if (!marker || !marker.el) return;
       if (event.preventDefault) event.preventDefault();
-      // 予想ボードのタブが閉じていれば開く（PCは「予想ボード」、スマホは「ボード」）
+      // 予想のタブが閉じていれば開く（タブの名前は PC・スマホとも「予想」）
       let wait = 0;
       const tabs = doc.querySelectorAll('[data-testid="stTab"]');
       for (let i = 0; i < tabs.length; i++) {
-        const label = tabs[i].textContent || "";
-        if (label.indexOf("予想ボード") === 0 || label === "ボード") {
+        const label = (tabs[i].textContent || "").trim();
+        if (label === "予想" || label.indexOf("予想ボード") === 0) {
           const open = tabs[i].getAttribute && tabs[i].getAttribute("aria-selected") === "true";
-          if (!open) {
-            tabs[i].click();
-            wait = 200;
-          }
+          if (!open) { tabs[i].click(); wait = 200; }
           break;
         }
       }
@@ -590,81 +405,38 @@
     doc.addEventListener("click", win.__keibaBoardLink, true);
   }
 
-  function select(marker) {
-    selected = marker;
-    markers.forEach(function (m) { if (m.el) m.el.classList.remove("selected"); });
-    marker.el.classList.add("selected");
-    document.getElementById("editor").classList.add("open");
-    document.getElementById("editor-head").textContent =
-      (marker.umaban == null ? "" : marker.umaban + " ") + marker.horse_name;
-    document.getElementById("editor-why").textContent = marker.explanation;
-    const box = document.getElementById("comment");
-    box.value = marker.comment || "";
-    box.focus();
-    setHeight();
-  }
-
-  document.getElementById("comment").addEventListener("input", function (event) {
-    if (!selected) return;
-    selected.comment = event.target.value;
-    if (selected.el) {
-      // ✎の見た目（コメントあり）はマーカー側に付ける
-      selected.el.classList.toggle("has-comment", !!selected.comment);
-    }
-    saveCommentLater();      // 打ち終わり（600ms）を待ってから保存
-  });
-  // 欄から離れたら、待たずに保存する
-  document.getElementById("comment").addEventListener("blur", saveCommentNow);
-
   window.addEventListener("message", function (event) {
     if (!event.data || event.data.type !== "streamlit:render") return;
-    const args = event.data.args || {};
-    const payload = args.payload || {};
+    const payload = (event.data.args || {}).payload || {};
     raceId = payload.race_id || raceId;
-    installBoardLinks();         // 馬柱の枠 → この盤の馬（レースIDが分かってから付ける）
-    // **自分の保存が返ってきただけ**なら、盤は画面にもう出ているので描き直さない。
-    // 描き直すとコメント欄が閉じたり、書きかけが消えたりする。
+    installBoardLinks();
+    // **自分の保存が返ってきただけ**なら、盤は画面にもう出ているので描き直さない
     // （このとき届く中身は保存**前**のものでもあるので、なおさら当ててはいけない）
     if (waitingSave) {
       waitingSave = false;
-      setStatus("保存しました");
       if (payload.rev != null) appliedRev = payload.rev;
       setHeight();
       return;
     }
-    // 古い番号の描画は捨てる（順番が入れ替わって届くことがあるため、番号での判定が要る）
+    // 古い番号の描画は捨てる（順番が入れ替わって届くことがあるため）
     if (payload.rev != null && payload.rev <= appliedRev) return;
-    // 番号は**中身の判定より先に**進めておく。ここで戻ると、あとから届いた
-    // 中途半端な番号の描画を通してしまう。
     if (payload.rev != null) appliedRev = payload.rev;
-    // 中身が前と同じなら描き直さない（無駄なちらつきを避ける）
     if (payload.version && payload.version === appliedVersion) return;
     appliedVersion = payload.version || null;
-    laneHeight = payload.lane_height || DEFAULT_LANE_HEIGHT;
-    laneHead = payload.lane_head || DEFAULT_LANE_HEAD;
     lanes = payload.lanes || [];
+    columns = payload.columns || columns;
+    centers = payload.column_centers || DEFAULT_CENTERS;
     phone = payload.layout === "phone";
-    reservePx = payload.reserve_px || 0;
     bodyClass("phone", phone);
     markers = (payload.markers || []).map(function (m) { return Object.assign({}, m); });
-    document.getElementById("axis-left").textContent = "← " + ((payload.axis || {}).left || "");
-    document.getElementById("axis-right").textContent = ((payload.axis || {}).right || "") + " →";
     draw();
   });
 
-  // 最初は隠れているタブ（PCの予想ボード）の中で描かれると、高さを0のまま送ってしまう。
-  // 見えるようになると部品の枠の幅が変わる（resize）ので、描き直して高さを送り直す
+  // 最初は隠れているタブ（PCの予想）の中で描かれると、高さを0のまま送ってしまう。
+  // 見えるようになると部品の枠の幅が変わる（resize）ので、高さを送り直す
   window.addEventListener("resize", function () {
-    if (window.innerWidth <= 50) return;          // 幅が無いうち（隠れている間）は描かない
-    if (lanes.length) draw(); else setHeight();
+    if (window.innerWidth > 50) setHeight();
   });
-
-  // 画面の向きを変えたら（縦持ち⇔横持ち）、回すかどうかを決め直して描き直す
-  try {
-    window.parent.addEventListener("resize", function () {
-      if (phone && lanes.length) draw();
-    });
-  } catch (e) { /* 親が読めない環境では向きの変化に追いつかないだけ */ }
 
   send("streamlit:componentReady", { apiVersion: 1 });
   setHeight();

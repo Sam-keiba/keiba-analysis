@@ -31,6 +31,26 @@ LANES = tuple(
 AXIS_LEFT = "Save runner"
 AXIS_RIGHT = "FrontRunner"
 
+# --- 2026-10 の資料: 段（A〜D）× 脚質の4列のカード型 ------------------------------------
+# 列は右から 逃げ・先行・差し・追込（右が前）。番号 0 が逃げ（右端）。
+# 保存の形は変えない: 列は `position` の4区分（逃げ 0.75以上 … 追込 0.25未満）、
+# 列の中の並び順は `lane_offset`（小さいほど上）。前の連続した横位置の保存も、4区分に丸めて読める。
+COLUMNS = ("逃げ", "先行", "差し", "追込")
+COLUMN_CENTERS = (0.875, 0.625, 0.375, 0.125)
+
+
+def column_of(position: float | None) -> int:
+    """横位置（0=最後方〜1=先頭）から列の番号（0=逃げ〜3=追込）。"""
+    if position is None:
+        return 2
+    if position >= 0.75:
+        return 0
+    if position >= 0.5:
+        return 1
+    if position >= 0.25:
+        return 2
+    return 3
+
 NEUTRAL_POSITION = 0.5      # 通過順位が無い馬（新馬など）は真ん中あたりに置く
 # 通過順位が無い馬を並べる帯。全員を真ん中の1点に重ねると、新馬戦のように
 # 全頭が未知のレースで縦に積み上がってしまうので、この幅に散らす。
@@ -235,6 +255,11 @@ def build_markers(
     for key, *_ in LANES:
         _spread([m for m in markers if m["tier"] == key], metrics)
 
+    # 列（脚質）: 脚質が分かる馬はその列、分からない馬は横位置の4区分
+    for marker in markers:
+        style = marker.get("style")
+        marker["column"] = COLUMNS.index(style) if style in COLUMNS else column_of(marker["position"])
+
     # --- 手を入れた馬だけを上書きする ---
     for marker in markers:
         marker.pop("_auto", None)   # 基準に使っただけなので、画面には渡さない
@@ -247,7 +272,30 @@ def build_markers(
         marker["comment"] = stored.get("comment") or ""
         marker["is_manual"] = bool(stored.get("is_manual"))
         marker["is_excluded"] = bool(stored.get("is_excluded"))
+        if marker["is_manual"] and stored.get("position") is not None:
+            marker["column"] = column_of(stored["position"])
+    _assign_order(markers)
     return markers
+
+
+def _assign_order(markers: list[dict]) -> None:
+    """列の中の並び順（`order`。小さいほど上）を決める（その場で書き換える）。
+
+    手で動かした馬は保存した順（`lane_offset`）、それ以外は同じ段・同じ列の中で前にいる馬から 0, 1, 2…。
+    動かした馬は前後の馬の間の小数で入るので、他の馬の順番は変えずに済む。
+    """
+    groups: dict[tuple[str, int], list[dict]] = {}
+    for marker in markers:
+        groups.setdefault((marker["tier"], marker["column"]), []).append(marker)
+    for group in groups.values():
+        auto = sorted((m for m in group if not m["is_manual"]),
+                      key=lambda m: (-m["position"], m["umaban"] or 0))
+        for i, marker in enumerate(auto):
+            marker["order"] = float(i)
+        for marker in group:
+            if marker["is_manual"]:
+                stored = marker.get("lane_offset")
+                marker["order"] = float(stored) if stored is not None else float(len(auto))
 
 
 def stretch_positions(markers: list[dict], metrics: Metrics = PC) -> None:
@@ -324,6 +372,7 @@ def markers_version(markers: list[dict]) -> str:
     """
     parts = [
         f'{m["horse_id"]}:{m["tier"]}:{m["position"]}:{m["lane_offset"]}'
+        f':{m.get("column")}:{m.get("order")}'
         f':{m["comment"]}:{int(bool(m.get("is_excluded")))}'
         for m in sorted(markers, key=lambda m: m["horse_id"])
     ]
@@ -357,6 +406,9 @@ def board_payload(
         "race_id": race_id,
         "lanes": [{"key": k, "label": label, "meaning": meaning} for k, label, meaning in LANES],
         "axis": {"left": AXIS_LEFT, "right": AXIS_RIGHT},
+        # 段×脚質のカード型（2026-10）。列は右から 逃げ・先行・差し・追込
+        "columns": list(COLUMNS),
+        "column_centers": list(COLUMN_CENTERS),
         "markers": markers,
         # 見出しの列の幅はここが唯一の出どころ（CSSに直書きしない）。
         # 馬を置ける幅の見積もり（NOMINAL_FIELD_PX）と必ず同じ前提になる。
