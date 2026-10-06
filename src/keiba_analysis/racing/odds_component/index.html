@@ -663,7 +663,7 @@
   /**
    * スマホの下の浮いたバーと、シートの後ろの暗幕を1回だけ作る（資料 Mobile.dc.html どおり）。
    * 左半分「買い目へ追加(N頭)」、右半分「買い目 N点 ▲ ／ 合計」。
-   * 左半分は単勝・複勝の表のときだけ出す（組み合わせの券種はパネルの中の追加ボタンを使う）。
+   * 左半分は単勝・複勝のタブで出す（オッズが未取得でも）。組み合わせの券種はパネルの中の追加ボタンを使う。
    * 単勝・複勝のように追加先が2つあるタブでは、押すとバーの上に「単勝へ」「複勝へ」を出して選ばせる。
    */
   function ensurePhoneBar() {
@@ -695,7 +695,8 @@
     if (!add) return;
     const t = tab(active);
     const first = t && bet(t.bets[0]);
-    const single = !!(first && first.legs === 1 && tabCount(t).available);
+    // 単勝・複勝のタブでは、オッズがまだ無くても出す（資料どおり。選べないうちは灰色の0頭のまま）
+    const single = !!(first && first.legs === 1);
     bodyClass("bar-no-add", !single);
     const n = pickedSingles().length;
     add.textContent = "買い目へ追加(" + n + "頭)";
