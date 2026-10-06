@@ -339,8 +339,18 @@
   // --- 馬柱との行き来 --------------------------------------------------------------
 
   /** スマホ: 押した馬の詳細を開くよう Python へ伝える（保存とは別の値。`saved_at` は付けない）。 */
+  /** 詳細を開く押下のその場で、履歴を1つ積む（back_gesture.py）。Safariは、押下と無関係に（再描画のあとで）
+   *  積んだ履歴を「戻る」で飛ばすので、押した瞬間のこの関数の中で積む。 */
+  function pushDetailEntry() {
+    try {
+      var S = window.parent.__keibaBack;
+      if (S && !S.pushed) { S.pushed = true; window.parent.history.pushState({ keibaDetail: 1 }, ""); }
+    } catch (e) { /* 親の画面を触れなければ、戻るはこれまでどおり */ }
+  }
+
   function openDetail(marker) {
     if (!marker.horse_id) return;
+    pushDetailEntry();
     send("streamlit:setComponentValue", {
       value: { open: marker.horse_id, race_id: raceId, at: Date.now() },
       dataType: "json",
