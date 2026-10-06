@@ -100,13 +100,18 @@ def test_days_without_a_winner_are_listed_newest_first():
         row("2026-09-20", 11, winner_corner=None),
         row("2026-09-20", 9, winner_corner=None),      # 同じ日は1つにまとめる
         row("2026-09-19", 10, winner_corner=None),
-        row("2026-09-13", 11, winner_corner="3-3-3-3"),
+        row("2026-09-13", 11, winner_corner="3-3-3-3", winner_umaban=4),
     ]
     assert meeting.days_without_winner(rows) == ["2026-09-20", "2026-09-19"]
 
 
 def test_no_days_to_fetch_when_every_winner_is_known():
-    assert meeting.days_without_winner([row()]) == []
+    assert meeting.days_without_winner([row(winner_umaban=4)]) == []
+
+
+def test_a_day_without_the_winner_number_is_fetched_again():
+    """勝ち馬の馬番・馬名・上りは 2026-10 に足した列なので、古い取り込みの日は取り込み直す。"""
+    assert meeting.days_without_winner([row(winner_umaban=None)]) == ["2026-09-20"]
 
 
 # --- 日ごとのタブ -------------------------------------------------------------------
@@ -168,9 +173,47 @@ def test_a_race_without_a_token_shows_no_icon():
     assert cell == ""
 
 
-def test_the_day_heading_spans_every_column():
-    """列を足したら、日付の見出しの colspan も合わせること。"""
+def test_every_column_has_a_heading():
+    """持ちタイムと同じく、見出し行に列名を出す（列を足したら見出しも足すこと）。"""
     html = meeting.render_meeting([row()])
-    span = int(html.split("colspan='")[1].split("'")[0])
-    body = html.split("</tr>")[1]                      # 日付の行の次＝レースの行
-    assert body.count("<td") == span
+    head = html.split("<thead>")[1].split("</thead>")[0]
+    body = html.split("<tbody>")[1].split("</tr>")[0]
+    assert head.count("<th") == body.count("<td") == 14
+    for label in ("R", "馬番", "馬名", "タイム", "上り", "前後3F", "ペース", "脚質", "馬場", "ク"):
+        assert f">{label}</th>" in head
+
+
+def test_the_winner_last_3f_and_the_pace_are_shown():
+    """持ちタイムと同じく、上り（勝ち馬）とペース記号を出す。"""
+    html = meeting.render_meeting([row(winner_last_3f=33.48, first_3f=36.0, last_3f=34.0)])
+    cell = html.split("<td class='mt-num'>")[1].split("</td>")[0]
+    assert cell == "33.5"
+    pace = html.split("<td class='mt-pace'>")[1].split("</td>")[0]
+    assert "pg-pace" in pace and ">S<" in pace          # 前半が遅い＝スロー
+
+
+def test_the_winner_last_3f_is_a_dash_without_results():
+    """JRAのラップだけ取り込んだレース（馬ごとの結果がまだ無い）は「—」。"""
+    html = meeting.render_meeting([row()])
+    assert html.split("<td class='mt-num'>")[1].split("</td>")[0] == "—"
+
+
+def test_the_hardness_is_a_column_like_the_best_times():
+    html = meeting.render_meeting([row(cushion_value=8.6)])
+    assert html.split("<td class='mt-hard'>")[1].split("</td>")[0] == "8.6"
+    dirt = meeting.render_meeting([row(surface="dirt", cushion_value=None, dirt_moisture_goal=7.7)])
+    assert ">含水</th>" in dirt and "<td class='mt-hard'>7.7</td>" in dirt
+
+
+def test_the_winner_number_and_name_are_shown():
+    """持ちタイムと同じく、馬番（枠の色）と馬名を出す。開催の表では勝ち馬。"""
+    html = meeting.render_meeting([row(winner_umaban=7, winner_waku=4, winner_name="ジョスラン")])
+    cell = html.split("<td class='mt-waku'>")[1].split("</td>")[0]
+    assert ">7</span>" in cell and "background:" in cell
+    assert "ジョスラン" in html.split("<td class='mt-horse'>")[1].split("</td>")[0]
+
+
+def test_the_winner_is_a_dash_without_results():
+    html = meeting.render_meeting([row()])
+    assert html.split("<td class='mt-waku'>")[1].split("</td>")[0] == "—"
+    assert html.split("<td class='mt-horse'>")[1].split("</td>")[0] == "<div>—</div>"

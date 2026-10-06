@@ -12,10 +12,11 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
-from keiba_analysis.racing.past_runs import class_short, cushion_label, jra_race_link
+from keiba_analysis.racing.best_times import hardness_head, hardness_text
+from keiba_analysis.racing.past_runs import class_short, cushion_label, jra_race_link, pace_mark
 from keiba_analysis.racing.race_forecast import format_race_time
 from keiba_analysis.racing.running_style import classify_run
-from keiba_analysis.shared.style import RUNNING_STYLE_COLORS
+from keiba_analysis.shared.style import RUNNING_STYLE_COLORS, waku_color
 
 DASH = "—"
 WEEKDAYS = ("月", "火", "水", "木", "金", "土", "日")
@@ -79,30 +80,70 @@ def _style_cell(row: dict) -> str:
     return f'<span style="color:{color};font-weight:700" title="{tooltip}">{escape(style)}</span>'
 
 
+def _columns(surface: str | None) -> list[tuple[str, str]]:
+    """表の列（td のクラス, 見出し）。持ちタイムの表と同じ見た目・同じ並びの考え方にそろえる。"""
+    return [
+        ("mt-no", "R"), ("mt-course", "距離"), ("mt-class", "クラス"), ("mt-name", "レース名"),
+        ("mt-waku", "馬番"), ("mt-horse", "馬名"), ("mt-time", "タイム"), ("mt-num", "上り"), ("mt-split", "前後3F"), ("mt-pace", "ペース"),
+        ("mt-style", "脚質"), ("mt-going", "馬場"), ("mt-hard", hardness_head(surface)),
+        ("mt-detail", "映像"),
+    ]
+
+
+def _winner_badge(row: dict) -> str:
+    """勝ち馬の馬番（枠の色の四角。持ちタイムの馬番と同じ見た目）。結果が無ければ「—」。"""
+    number = row.get("winner_umaban")
+    if number is None:
+        return DASH
+    background, color = waku_color(row.get("winner_waku"))
+    return f'<span class="waku" style="background:{background};color:{color}">{escape(str(number))}</span>'
+
+
+def _winner_last_3f(row: dict) -> str:
+    """勝ち馬の上り3F。馬ごとの結果がまだ無いレース（JRAのラップだけ）は「—」。"""
+    value = row.get("winner_last_3f")
+    return DASH if value is None else f"{float(value):.1f}"
+
+
 def render_meeting(rows: list[dict]) -> str:
-    """開催の勝ちタイムの表（日ごとに区切る）。"""
+    """開催の勝ちタイムの表（**持ちタイムの表と同じ見た目**: 見出し行に列名、薄い灰の見出し）。
+
+    列は R・距離・クラス・レース名・馬番と馬名（勝ち馬）・タイム・上り（勝ち馬）・前後3F・ペース・
+    脚質（勝ち馬）・馬場・馬場の硬さ・映像。馬ごとの結果がまだ無いレース（JRAのラップだけ）は、
+    勝ち馬の馬番・馬名・上りが「—」になる。日ごとにタブで分けて渡される前提なので日の区切りの行は置かず、
+    クッション値（含水率）は持ちタイムと同じく列に出す。
+    """
     if not rows:
         return ""
-    lines = ["<div class='meeting-wrap'><table class='meeting'>"]
-    for label, hardness, races in group_by_day(rows):
-        head = escape(label) + (f"　{escape(hardness)}" if hardness else "")
-        lines.append(f"<tr class='mt-day'><td colspan='9'>{head}</td></tr>")
-        for row in races:
-            name = escape(row.get("race_name") or "")
-            lines.append(
-                f"<tr title='{name}'>"
-                f"<td class='mt-no'>{row.get('race_no') or DASH}R</td>"
-                f"<td class='mt-course'>{escape(course_label(row))}</td>"
-                f"<td class='mt-class'>{escape(class_short(row))}</td>"
-                f"<td class='mt-name'><div>{name}</div></td>"
-                f"<td class='mt-time'>{escape(format_race_time(row.get('time_sec')))}</td>"
-                f"<td class='mt-split'>{escape(split_label(row))}</td>"
-                f"<td class='mt-style'>{_style_cell(row)}</td>"
-                f"<td class='mt-going'>{escape(row.get('going') or DASH)}</td>"
-                # いちばん右にJRA公式のレース結果ページ（レース映像）へのリンク
-                f"<td class='mt-detail'>{jra_race_link(row, 'mt-link')}</td></tr>"
-            )
-    lines.append("</table></div>")
+    columns = _columns(rows[0].get("surface"))
+    head = "".join(f"<th class='{cls}'>{escape(label)}</th>" for cls, label in columns)
+    lines = [
+        "<div class='best-times-wrap meeting-wrap'><table class='best-times mt-table'>"
+        f"<thead><tr>{head}</tr></thead><tbody>"
+    ]
+    for row in rows:
+        name = escape(row.get("race_name") or "")
+        # ペース記号は馬柱・持ちタイムと同じ判定（レース全体の前半3F・後半3F）
+        pace = pace_mark({**row, "race_first_3f": row.get("first_3f"), "race_last_3f": row.get("last_3f")})
+        lines.append(
+            f"<tr title='{name}'>"
+            f"<td class='mt-no'>{row.get('race_no') or DASH}R</td>"
+            f"<td class='mt-course'>{escape(course_label(row))}</td>"
+            f"<td class='mt-class'>{escape(class_short(row))}</td>"
+            f"<td class='mt-name'><div>{name}</div></td>"
+            f"<td class='mt-waku'>{_winner_badge(row)}</td>"
+            f"<td class='mt-horse'><div>{escape(row.get('winner_name') or DASH)}</div></td>"
+            f"<td class='mt-time'>{escape(format_race_time(row.get('time_sec')))}</td>"
+            f"<td class='mt-num'>{escape(_winner_last_3f(row))}</td>"
+            f"<td class='mt-split'>{escape(split_label(row))}</td>"
+            f"<td class='mt-pace'>{pace or DASH}</td>"
+            f"<td class='mt-style'>{_style_cell(row)}</td>"
+            f"<td class='mt-going'>{escape(row.get('going') or DASH)}</td>"
+            f"<td class='mt-hard'>{escape(hardness_text(row))}</td>"
+            # いちばん右にJRA公式のレース結果ページ（レース映像）へのリンク
+            f"<td class='mt-detail'>{jra_race_link(row, 'mt-link')}</td></tr>"
+        )
+    lines.append("</tbody></table></div>")
     return "".join(lines)
 
 
@@ -114,6 +155,7 @@ def days_without_winner(rows: list[dict]) -> list[str]:
     """
     missing = {
         row["race_date"] for row in rows
-        if not row.get("winner_corner") and row.get("race_date")
+        # 勝ち馬の馬番も、JRAから取り込み直すと入る（2026-10 に足した列。古い取り込みには無い）
+        if (not row.get("winner_corner") or row.get("winner_umaban") is None) and row.get("race_date")
     }
     return sorted(missing, reverse=True)

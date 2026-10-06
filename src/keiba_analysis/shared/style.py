@@ -593,6 +593,27 @@ table.best-times .bt-hard {{ width: 44px; color: #5a615a; font-variant-numeric: 
 table.best-times .bt-finish {{ width: 34px; }}
 table.best-times td.bt-finish {{ text-align: right; }}
 
+/* --- 開催の勝ちタイム（持ちタイムと同じ表。列の幅だけここで決める）--------------------- */
+/* 14列あるので、右の列に収まらないときは表の中を横にスクロールさせる */
+table.mt-table {{ min-width: 760px; }}
+table.mt-table .mt-no {{ width: 30px; text-align: right; color: #6b716b; }}
+table.mt-table .mt-waku {{ width: 30px; text-align: center; }}
+table.mt-table .mt-horse {{ width: 110px; }}
+table.mt-table .mt-horse div {{ width: 100%; overflow: hidden; text-overflow: ellipsis; }}
+table.mt-table .mt-course {{ width: 54px; font-weight: 700; }}
+table.mt-table .mt-class {{ width: 40px; color: #5a615a; text-align: center; }}
+/* レース名は余った幅を受け持つ（長ければ…で省略） */
+table.mt-table .mt-name div {{ width: 100%; overflow: hidden; text-overflow: ellipsis; color: #5a615a; }}
+table.mt-table .mt-time {{ width: 48px; font-weight: 700; font-variant-numeric: tabular-nums; }}
+table.mt-table .mt-num {{ width: 34px; font-variant-numeric: tabular-nums; }}
+table.mt-table .mt-split {{ width: 64px; font-variant-numeric: tabular-nums; color: #5a615a; }}
+table.mt-table .mt-pace {{ width: 36px; text-align: center; }}
+table.mt-table .mt-style {{ width: 34px; text-align: center; }}
+table.mt-table .mt-going {{ width: 36px; text-align: center; color: #5a615a; }}
+table.mt-table .mt-hard {{ width: 40px; color: #5a615a; font-variant-numeric: tabular-nums; }}
+table.mt-table .mt-detail {{ width: 34px; text-align: center; }}
+table.mt-table th {{ text-align: center !important; }}
+
 /* --- 馬柱／オッズ のタブ（レース画面のいちばん下） ---------------------------------
    **セレクタはStreamlitが実際に出す印に合わせる。** 1.64は `data-testid="stTab"` /
    `stTabPanel` と、react-aria の `aria-selected` を出す（BaseWeb時代の印はもう出ない）。
