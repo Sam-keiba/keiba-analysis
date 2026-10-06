@@ -489,18 +489,47 @@
   body.phone input[type="checkbox"] { width: 22px; height: 22px; }
   body.phone .mini { border-radius: 999px !important; }
   body.phone .mini.go { box-shadow: 0 2px 8px rgba(26,127,75,.35); }
-  /* 「選んだ馬を単勝へ」などの段は、浮いたバーのすぐ上に貼り付ける */
-  body.phone .acts-line {
-    display: flex; flex-wrap: wrap; gap: 6px; bottom: 76px; padding: 8px 0; background: #f3f2f2;
+  /* 単勝・複勝の「選んだ馬を〜へ」の段は、スマホでは下のバーの左半分にまとめる */
+  body.phone .acts-line { display: none; }
+  /* 見出し: 取得時刻の灰のピルと、右端の丸い ↻（全券種をまとめて取り込む） */
+  body.phone .head-line { display: flex; align-items: center; gap: 10px; }
+  .time-chip {
+    font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px !important; background: #e1dfde;
   }
-  /* 下の浮いたバー（買い目の合計と「買い目 N点 ▲」）: 黒地・角丸18px・影 */
+  .refresh-all-round {
+    margin-left: auto; width: 36px; height: 36px; padding: 0; border: none; border-radius: 999px !important;
+    background: #e6f3ec; color: #0f5632; font-size: 18px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: transform .12s;
+  }
+  .refresh-all-round:active { transform: scale(.92); }
+  .refresh-all-round[disabled] { opacity: .5; }
+  /* 下の浮いたバー: 左半分「買い目へ追加(N頭)」、右半分「買い目 N点 ▲ ／ 合計」。黒地・角丸18px・影 */
   #phone-bar {
-    left: 12px; right: 12px; bottom: 8px; height: 58px; padding: 0 0 0 18px;
+    left: 12px; right: 12px; bottom: 8px; height: 58px; padding: 0; align-items: stretch;
     border-radius: 18px !important; box-shadow: 0 8px 24px rgba(0,0,0,.3); overflow: hidden;
   }
-  #phone-bar span { font: 900 16px 'Archivo', 'Noto Sans JP', sans-serif; }
   #phone-bar button {
-    height: 100%; border: none; border-left: 1px solid #555; padding: 0 20px; font-size: 14px;
+    flex: 1; height: 100%; min-height: 0; border: none; border-radius: 0 !important; padding: 0 10px;
+    background: transparent; color: #fff; font: inherit; font-weight: 900; font-size: 14px;
+  }
+  #phone-bar-add { background: #4a4846 !important; }
+  #phone-bar-add.on { background: var(--accent) !important; }
+  body.bar-no-add #phone-bar-add { display: none; }
+  #phone-bar-open {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    border-left: 1px solid #555 !important;
+  }
+  #phone-bar-open span { font-size: 11px; font-weight: 400; }
+  #phone-bar-open b { font: 900 16px 'Archivo', 'Noto Sans JP', sans-serif; }
+  /* 単勝・複勝の追加先を選ぶ小さなピル（バーの左半分の上に出す） */
+  #phone-bar-choice {
+    display: none; position: fixed; left: 12px; bottom: 74px; z-index: 21; gap: 8px; padding: 6px;
+    border-radius: 999px !important; background: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  }
+  #phone-bar-choice.open { display: flex; }
+  #phone-bar-choice button {
+    height: 40px; padding: 0 18px; border: none; border-radius: 999px !important;
+    background: var(--accent); color: #fff; font: inherit; font-weight: 900; font-size: 14px;
   }
   /* 下から開く買い目シート: 上だけ角丸22px */
   body.phone .slip {
@@ -630,16 +659,77 @@
     if (body && body.classList && body.classList.toggle) body.classList.toggle(name, !!on);
   }
 
-  /** スマホの下部バー（買い目 N点 ↑）と、シートの後ろの暗幕を1回だけ作る。 */
+  /**
+   * スマホの下の浮いたバーと、シートの後ろの暗幕を1回だけ作る（資料 Mobile.dc.html どおり）。
+   * 左半分「買い目へ追加(N頭)」、右半分「買い目 N点 ▲ ／ 合計」。
+   * 左半分は単勝・複勝の表のときだけ出す（組み合わせの券種はパネルの中の追加ボタンを使う）。
+   * 単勝・複勝のように追加先が2つあるタブでは、押すとバーの上に「単勝へ」「複勝へ」を出して選ばせる。
+   */
   function ensurePhoneBar() {
     if (!phone || document.getElementById("phone-bar") || !document.body) return;
     const backdrop = el("div", { id: "sheet-backdrop" });
     backdrop.addEventListener("click", function () { bodyClass("sheet-open", false); });
-    const open = el("button", { type: "button", id: "phone-bar-open", text: "買い目 0点 ▲" });
-    open.addEventListener("click", function () { bodyClass("sheet-open", true); });
-    const bar = el("div", { id: "phone-bar" }, [el("span", { id: "phone-bar-total", text: "0円" }), open]);
+    const add = el("button", { type: "button", id: "phone-bar-add", text: "買い目へ追加(0頭)" });
+    add.addEventListener("click", onPhoneAdd);
+    const open = el("button", { type: "button", id: "phone-bar-open" }, [
+      el("span", { id: "phone-bar-count", text: "買い目 0点 ▲" }),
+      el("b", { id: "phone-bar-total", text: "0円" }),
+    ]);
+    open.addEventListener("click", function () { hidePhoneChoice(); bodyClass("sheet-open", true); });
+    const choice = el("div", { id: "phone-bar-choice" });
+    const bar = el("div", { id: "phone-bar" }, [add, open]);
     document.body.appendChild(backdrop);
+    document.body.appendChild(choice);
     document.body.appendChild(bar);
+  }
+
+  function pickedSingles() {
+    return Object.keys(singlePicks).filter(function (n) { return singlePicks[n]; })
+      .map(Number).sort(function (a, c) { return a - c; });
+  }
+
+  /** バーの左半分（追加ボタン）を、いまのタブと選んだ頭数に合わせる。 */
+  function updatePhoneAdd() {
+    const add = document.getElementById("phone-bar-add");
+    if (!add) return;
+    const t = tab(active);
+    const first = t && bet(t.bets[0]);
+    const single = !!(first && first.legs === 1 && tabCount(t).available);
+    bodyClass("bar-no-add", !single);
+    const n = pickedSingles().length;
+    add.textContent = "買い目へ追加(" + n + "頭)";
+    add.classList.toggle("on", n > 0);
+    hidePhoneChoice();
+  }
+
+  function hidePhoneChoice() {
+    const choice = document.getElementById("phone-bar-choice");
+    if (choice) { choice.textContent = ""; choice.classList.remove("open"); }
+  }
+
+  function addSinglesTo(betKey) {
+    const numbers = pickedSingles();
+    if (!numbers.length) return;
+    addToSlip(betKey, numbers.map(String), "通常");
+    Object.keys(singlePicks).forEach(function (n) { delete singlePicks[n]; });
+    drawPanel(false);
+    bodyClass("sheet-open", true);           // 資料どおり、追加したら買い目シートを開く
+  }
+
+  function onPhoneAdd() {
+    const t = tab(active);
+    if (!t || !pickedSingles().length) return;
+    const bets = t.bets.map(bet).filter(function (b) { return !!b; });
+    if (bets.length === 1) { addSinglesTo(bets[0].key); return; }
+    const choice = document.getElementById("phone-bar-choice");
+    if (choice.classList.contains("open")) { hidePhoneChoice(); return; }
+    choice.textContent = "";
+    bets.forEach(function (b) {
+      const button = el("button", { type: "button", text: b.label + "へ" });
+      button.addEventListener("click", function () { hidePhoneChoice(); addSinglesTo(b.key); });
+      choice.appendChild(button);
+    });
+    choice.classList.add("open");
   }
 
   /**
@@ -1148,8 +1238,8 @@
     box.appendChild(el("span", { text: totals.points + "点" }));
     box.appendChild(el("span", { class: "yen", text: yenText(totals.yen) }));
     // スマホの下部バーにも同じ合計を出す
-    const open = document.getElementById("phone-bar-open");
-    if (open) open.textContent = "買い目 " + totals.points + "点 ▲";
+    const count = document.getElementById("phone-bar-count");
+    if (count) count.textContent = "買い目 " + totals.points + "点 ▲";
     const total = document.getElementById("phone-bar-total");
     if (total) total.textContent = yenText(totals.yen);
   }
@@ -1211,6 +1301,28 @@
     return button;
   }
 
+  /** スマホの見出し: 取得時刻は灰のピル（押せない）。 */
+  function phoneTimeChip(t) {
+    return el("span", { class: "time-chip", text: t.chip || "未取得" });
+  }
+
+  /**
+   * スマホの見出しの右端の丸い ↻。**全券種をまとめて**取り込む（資料どおり）。
+   * クラウド（readOnly）ではスクレイプしないので出さない。
+   */
+  function phoneRefreshAll() {
+    if (payload.readOnly) return null;
+    const button = el("button", {
+      class: "refresh-all-round", type: "button", text: "↻",
+      title: "全券種をまとめて取り込む（約21秒）", "aria-label": "全券種をまとめて取り込む",
+    });
+    button.addEventListener("click", function () {
+      button.setAttribute("disabled", "disabled");
+      requestFetchMany((payload.tabs || []).map(function (t) { return t.key; }));
+    });
+    return button;
+  }
+
   // --- 単勝・複勝（1つの表に両方の列を並べる） -------------------------------------
 
   function drawSingle(t) {
@@ -1225,7 +1337,7 @@
       const combo = String(horse.number);
       const box = el("input", { type: "checkbox" });
       box.checked = !!set[horse.number];
-      box.addEventListener("change", function () { set[horse.number] = box.checked; });
+      box.addEventListener("change", function () { set[horse.number] = box.checked; updatePhoneAdd(); });
       const row = el("tr", { title: "行を押すと選べます" }, [
         el("td", { class: "tick" }, [box]),
         el("td", { class: "p", style: "text-align:center" }, [
@@ -1256,6 +1368,7 @@
         if (onName && jumpToGrid(horse)) return;
         box.checked = !box.checked;
         set[horse.number] = box.checked;
+        updatePhoneAdd();
       });
       body.appendChild(row);
     });
@@ -1619,15 +1732,15 @@
       void panel.offsetWidth;            // アニメーションをかけ直す
       panel.classList.add("fade");
     }
+    updatePhoneAdd();
     const t = tab(active);
     if (!t) { setHeight(); return; }
     const b = bet(t.bets[0]);
     if (!b) { setHeight(); return; }
 
-    panel.appendChild(el("div", { class: "head-line" }, [
-      el("strong", { text: t.label + "オッズ" }),
-      refreshChip(t),
-    ]));
+    panel.appendChild(el("div", { class: "head-line" }, phone
+      ? [el("strong", { text: t.label + "オッズ" }), phoneTimeChip(t), phoneRefreshAll()].filter(Boolean)
+      : [el("strong", { text: t.label + "オッズ" }), refreshChip(t)]));
 
     if (!tabCount(t).available) {
       panel.appendChild(el("div", {
