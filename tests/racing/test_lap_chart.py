@@ -1,15 +1,16 @@
 """ラップ推移グラフ（モーダルの中身）。"""
 
+import pytest
+
 from keiba_analysis.racing.lap_chart import (
     CHART_HEIGHT,
     LINE_COLORS,
     DEFAULT_CHART_RUNS,
-    IN_MONEY,
-    NO_FINISH,
-    OUT_OF_MONEY,
-    PLACE_OPACITIES,
-    PLACE_ORDER,
-    PLACE_WIDTHS,
+    COMPACT_RECENCY_WIDTHS,
+    EARLIER,
+    LATEST,
+    RECENCY_ORDER,
+    RECENCY_WIDTHS,
     ESTIMATED_LAP_KIND,
     LAP_KINDS,
     RACE_LAP_KIND,
@@ -27,7 +28,7 @@ from keiba_analysis.racing.lap_chart import (
     build_phase_spec,
     legend_items,
     finish_label,
-    place_label,
+    mark_recency,
     race_label,
 )
 from keiba_analysis.racing.lap_phases import PHASE_LABELS
@@ -195,12 +196,12 @@ def test_spec_has_no_schema_version():
 def test_lines_are_thick_enough_to_read():
     """1走につき2本（レースラップ＋個別推定）重なるので、線は太めにする。
 
-    太さは**走ごと**（複勝圏内か着外か）で決めるので、markには固定値を置かない。
+    太さは**走ごと**（最新か、それ以前か）で決めるので、markには固定値を置かない。
     """
     spec = build_lap_spec(build_lap_rows([RUN]))
     mark = spec["layer"][0]["mark"]
     assert "strokeWidth" not in mark
-    assert max(PLACE_WIDTHS) >= 3
+    assert max(RECENCY_WIDTHS) >= 3
     assert mark["point"]["size"] >= 24
 
 
@@ -368,66 +369,57 @@ def test_finish_labels_keep_their_place_when_far_apart():
     assert all(r["label_y"] == r["pace_sec"] for r in build_finish_rows(rows))
 
 
-# --- 複勝圏内の走を太く濃く ---------------------------------------------------
+# --- 最新の走を太線に ---------------------------------------------------------
 
 
-def test_the_place_says_whether_the_run_was_in_the_money():
-    """1〜3着は複勝圏内、4着以下は着外。着順が無い走（取消・中止）は分けて持つ。"""
-    assert place_label({**RUN, "finish_position": 1}) == IN_MONEY
-    assert place_label({**RUN, "finish_position": 3}) == IN_MONEY
-    assert place_label({**RUN, "finish_position": 4}) == OUT_OF_MONEY
-    assert place_label({**RUN, "finish_position": 18}) == OUT_OF_MONEY
-    assert place_label(RUN) == NO_FINISH                                   # 着順が無い
-    assert place_label({**RUN, "finish_status": "中止"}) == NO_FINISH
+def test_the_widths_follow_the_design():
+    """資料のブルー版: 最新の走は PC 3.6px / スマホ 3.4px、ほかは PC 2.4px / スマホ 2.2px。"""
+    assert RECENCY_WIDTHS == [3.6, 2.4]
+    assert COMPACT_RECENCY_WIDTHS == [3.4, 2.2]
+    assert RECENCY_ORDER == [LATEST, EARLIER]
 
 
-def test_both_lines_of_a_run_share_the_same_emphasis():
-    """点線（レースラップ）も実線（個別推定）も、同じ走なら同じ太さ・濃さにする。"""
+def test_only_the_first_drawn_race_is_the_latest():
+    """新しい走から順に渡した先頭の走だけが最新。先頭にラップが無く描けなくても、描いた中で先頭が最新。"""
+    runs = [{**RUN, "finish_position": 1}, {**OTHER, "finish_position": 9}]
+    rows = build_lap_rows(runs)
+    assert {r["race_id"]: r["recency"] for r in rows} == {
+        "202601010101": LATEST, "202601010102": EARLIER,
+    }
+    phase_rows = build_phase_rows([{**LONG, "finish_position": 1}, {**SHORT, "finish_position": 9}])
+    assert {r["race_id"]: r["recency"] for r in phase_rows} == {
+        "202601010103": LATEST, "202601010104": EARLIER,
+    }
+    no_laps = {**RUN, "race_laps": None}
+    skipped = build_lap_rows([no_laps, {**OTHER}])
+    assert {r["recency"] for r in skipped} == {LATEST}
+    assert mark_recency([]) == []
+
+
+def test_both_lines_of_a_run_share_the_same_width():
+    """点線（レースラップ）も実線（個別推定）も、同じ走なら同じ太さにする。"""
     run = {**RUN, "finish_position": 2}
     estimates = {run_key(run): EstimatedLaps(values=[12.7, 11.0, 12.1], is_reference=False)}
     rows = build_lap_rows([run], estimates)
-    assert {r["place"] for r in rows} == {IN_MONEY}
+    assert {r["recency"] for r in rows} == {LATEST}
     assert {r["kind"] for r in rows} == {RACE_LAP_KIND, ESTIMATED_LAP_KIND}
-    # 3区分版も同じ（こちらは距離ぶんのラップがそろった走で見る）
-    long_run = {**LONG, "finish_position": 2}
-    long_estimates = {run_key(long_run): EstimatedLaps(values=[12.0] * 10, is_reference=False)}
-    assert {r["place"] for r in build_phase_rows([long_run], long_estimates)} == {IN_MONEY}
-
-
-def test_every_row_carries_the_emphasis():
-    """1走ずつ着順が違っても、行ごとに正しく付く（レース全体のラップを消しても）。"""
-    runs = [{**RUN, "finish_position": 1},
-            {**OTHER, "finish_position": 9}]
-    rows = build_lap_rows(runs, include_race_laps=False)
-    by_race = {r["race_id"]: r["place"] for r in rows}
-    assert by_race == {}
-    rows = build_lap_rows(runs)
-    assert {r["race_id"]: r["place"] for r in rows} == {
-        "202601010101": IN_MONEY, "202601010102": OUT_OF_MONEY,
-    }
-    phase_rows = build_phase_rows([{**LONG, "finish_position": 1},
-                                   {**SHORT, "finish_position": 9}])
-    assert {r["race_id"]: r["place"] for r in phase_rows} == {
-        "202601010103": IN_MONEY, "202601010104": OUT_OF_MONEY,
-    }
 
 
 def _line_encoding(spec: dict) -> dict:
     return spec["layer"][0]["encoding"]
 
 
-def test_the_in_the_money_lines_are_thicker_and_darker():
-    """複勝圏内のほうが太く・濃いこと（並びは domain と突き合わせて確かめる）。"""
-    for spec in (build_lap_spec(build_lap_rows([{**RUN, "finish_position": 1}])),
-                 build_phase_spec(build_phase_rows([{**LONG, "finish_position": 1}]))):
+@pytest.mark.parametrize("compact", [False, True])
+def test_the_latest_line_is_thicker(compact):
+    widths = COMPACT_RECENCY_WIDTHS if compact else RECENCY_WIDTHS
+    for spec in (build_lap_spec(build_lap_rows([RUN]), compact=compact),
+                 build_phase_spec(build_phase_rows([LONG]), compact=compact)):
         encoding = _line_encoding(spec)
-        for channel, values in (("strokeWidth", PLACE_WIDTHS), ("opacity", PLACE_OPACITIES)):
-            assert encoding[channel]["field"] == "place"
-            assert encoding[channel]["scale"]["domain"] == PLACE_ORDER
-            assert encoding[channel]["scale"]["range"] == values
-            assert encoding[channel]["legend"] is None
-            in_money = values[PLACE_ORDER.index(IN_MONEY)]
-            assert in_money > values[PLACE_ORDER.index(OUT_OF_MONEY)]
+        assert encoding["strokeWidth"]["field"] == "recency"
+        assert encoding["strokeWidth"]["scale"] == {"domain": RECENCY_ORDER, "range": widths}
+        assert encoding["strokeWidth"]["legend"] is None
+        assert encoding["strokeWidth"]["scale"]["range"][0] > encoding["strokeWidth"]["scale"]["range"][1]
+        assert "opacity" not in encoding               # 濃さは変えない
 
 
 def test_the_colour_and_the_dashes_are_untouched():
@@ -506,11 +498,12 @@ def test_compact_chart_keeps_its_height_for_the_plot():
     assert y["axis"]["values"] == [10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5]
 
 
-def test_compact_lines_out_of_the_money_stay_readable():
+def test_compact_lines_stay_readable():
+    """スマホは線を少し細く（最新 3.4px・ほか 2.2px）。濃さは変えず、色で見分ける。"""
     spec = build_phase_spec(build_phase_rows([LONG]), compact=True)
     encoding = spec["layer"][0]["encoding"]
-    assert min(encoding["opacity"]["scale"]["range"]) >= 0.8
-    assert min(encoding["strokeWidth"]["scale"]["range"]) >= 2.5
+    assert "opacity" not in encoding
+    assert min(encoding["strokeWidth"]["scale"]["range"]) >= 2.2
 
 
 def test_legend_items_follow_the_line_colours_with_the_finish_first():
@@ -518,5 +511,5 @@ def test_legend_items_follow_the_line_colours_with_the_finish_first():
     items = legend_items(rows)
     assert len(items) == 1
     label, color = items[0]
-    assert label.startswith("1着 ") and color == LINE_COLORS[0] == "#1a7f4b"
+    assert label.startswith("1着 ") and color == LINE_COLORS[0] == "#2f66a3"
     assert not legend_items(rows, compact=False)[0][0].startswith("1着")

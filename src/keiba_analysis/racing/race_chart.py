@@ -20,9 +20,9 @@ Y_TITLE = "区間ラップ（秒）"
 CHART_HEIGHT = 260
 LINE_WIDTH = 3              # 想定（実線）。平均は 2（docs/design_handoff のラップ想定）
 AVERAGE_WIDTH = 2
-PROJECTED_COLOR = "#1a7f4b"  # 想定はアクセントの緑（馬場の色にはしない。資料どおり）
+PROJECTED_COLOR = "#3b4552"  # 想定はアクセントの濃いスレート（馬場の色にはしない。資料どおり）
 AVERAGE_COLOR = "#6b6865"    # 平均は灰の破線
-BAND_COLOR = "#201f1d"
+BAND_COLOR = "#171c23"
 BAND_OPACITY = 0.07
 
 

@@ -18,23 +18,27 @@
   **ドラッグ中はStreamlitへ何も送らない**。離したときだけ保存を送る（自動保存）。
 -->
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;700&family=IBM+Plex+Sans+JP:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
   :root {
-    --ink: #201f1d;
-    --muted: #6b6865;
-    --line: #d4d1d0;
-    --accent: #1a7f4b;
-    --accent-100: #e6f3ec;
-    --accent-300: #9acbb0;
-    --tier-a: #0e6b3a;
-    --tier-b: #2f9b62;
-    --tier-c: #86c6a4;
-    --tier-d: #a9a7a6;
+    --ink: #171c23;
+    --muted: #6f7c8b;
+    --line: #d5dbe2;
+    --accent: #3b4552;
+    --accent-100: #f4f6f8;
+    --accent-300: #b4bdc8;
+    --tier-a: #262d37;
+    --tier-b: #3b4552;
+    --tier-c: #6f7c8b;
+    --tier-d: #94a0ae;
+    --card: #fbfbfc;
+    --card-d: #f4f6f8;
+    --r-card: 8px;       /* 予想ボードの段（--k-r2） */
+    --r-tier: 6px;       /* 段バッジ（--k-tr） */
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; color: var(--ink); background: transparent;
-    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    font-family: 'Figtree', 'IBM Plex Sans JP', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
     -webkit-tap-highlight-color: transparent;
   }
   /* 「← 後 ／ 前 →」はボードの上に右寄せで1つだけ */
@@ -42,37 +46,40 @@
     display: flex; justify-content: flex-end; padding: 16px 18px 8px 0;
     font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap;
   }
+  /* 段カード: 角丸8px・1pxの枠線風の影。左の太い色帯はやめ、A〜Dは角丸のバッジ（白文字）で出す */
   .tier {
-    display: flex; margin-bottom: 12px; border-radius: 22px; overflow: hidden; background: #fff;
-    border-left: 8px solid var(--tier-a); box-shadow: 0 1px 6px rgba(0,0,0,.1); user-select: none;
+    display: flex; margin-bottom: 12px; border-radius: var(--r-card); overflow: hidden; background: var(--card);
+    box-shadow: 0 0 0 1px var(--line); user-select: none;
   }
-  .tier[data-tier="B"] { border-left-color: var(--tier-b); }
-  .tier[data-tier="C"] { border-left-color: var(--tier-c); }
-  .tier[data-tier="D"] { border-left-color: var(--tier-d); background: #f8f4f4; }
+  .tier[data-tier="D"] { background: var(--card-d); }
   .tier-in { flex: 1; min-width: 0; display: flex; gap: 20px; padding: 16px 20px 18px 24px; }
-  .tier-key { flex: none; width: 48px; font: 900 38px/1 'Archivo', sans-serif; color: var(--tier-a); }
-  .tier[data-tier="B"] .tier-key { color: var(--tier-b); }
-  .tier[data-tier="C"] .tier-key { color: var(--tier-c); }
-  .tier[data-tier="D"] .tier-key { color: var(--tier-d); }
+  .tier-key {
+    flex: none; width: 56px; height: 56px; border-radius: var(--r-tier); display: flex; align-items: center;
+    justify-content: center; font: 700 30px/1 'Figtree', 'IBM Plex Sans JP', sans-serif; color: #fff;
+    background: var(--tier-a);
+  }
+  .tier[data-tier="B"] .tier-key { background: var(--tier-b); }
+  .tier[data-tier="C"] .tier-key { background: var(--tier-c); }
+  .tier[data-tier="D"] .tier-key { background: var(--tier-d); }
   /* 脚質の4列。row-reverse で、番号0（逃げ）が右端に来る */
   .cols { flex: 1; min-width: 0; display: flex; flex-direction: row-reverse; gap: 10px; }
   .col {
     flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; gap: 6px;
-    border-radius: 14px; transition: background .1s;
+    border-radius: var(--r-tier); transition: background .1s;
   }
   .col.over { background: var(--accent-100); }
   /* 馬のチップ（ピル）。枠色の馬番の丸＋馬名 */
   .chip {
     display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 8px;
-    border-radius: 999px; background: #fff; border: 1px solid var(--line);
+    border-radius: 999px; background: var(--card); border: 1px solid var(--line);
     box-shadow: 0 1px 4px rgba(0,0,0,.18); cursor: grab; white-space: nowrap; overflow: hidden;
     touch-action: none; user-select: none; -webkit-user-select: none;
   }
   .chip .num {
     flex: none; width: 24px; height: 24px; border-radius: 999px; display: flex; align-items: center;
-    justify-content: center; font-size: 12px; font-weight: 900; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+    justify-content: center; font-size: 12px; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
   }
-  .chip .name { min-width: 0; font-size: 14px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; }
+  .chip .name { min-width: 0; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
   .chip.manual { border: 2px solid var(--accent-300); }
   /* D段（＝消し）にいる馬と、前の盤で消した馬は、半透明＋グレースケール */
   .chip.dim { opacity: .5; filter: grayscale(1); }
@@ -86,9 +93,9 @@
 
   /* --- スマホ（payload.layout = "phone"。Mobile.dc.html の縦持ちのカード） --------------------- */
   body.phone .axis { padding: 12px 10px 6px 0; font-size: 11px; }
-  body.phone .tier { margin-bottom: 10px; border-radius: 18px; border-left-width: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  body.phone .tier { margin-bottom: 10px; }
   body.phone .tier-in { display: block; padding: 10px 8px 12px 10px; }
-  body.phone .tier-key { width: auto; font-size: 24px; }
+  body.phone .tier-key { width: 34px; height: 34px; font-size: 18px; }
   body.phone .cols { gap: 3px; margin-top: 10px; }
   body.phone .col { gap: 4px; }
   body.phone .chip { height: auto; min-height: 30px; gap: 2px; padding: 3px; border-radius: 15px; overflow: hidden; }

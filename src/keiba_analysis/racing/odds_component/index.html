@@ -20,15 +20,15 @@
 -->
 <style>
   /* 競馬新聞のフォント（@importは<style>の先頭でないと効かない） */
-  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;700&family=IBM+Plex+Sans+JP:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
   :root {
-    --line: #e3e6e3;
-    --line-strong: #c9cfc9;
-    --ink: #1b1b1b;
-    --muted: #6b716b;
-    --accent: #1b7f4b;
-    --head: #f4f6f4;
-    --zebra: #fafbfa;
+    --line: #d5dbe2;
+    --line-strong: #b4bdc8;
+    --ink: #171c23;
+    --muted: #6f7c8b;
+    --accent: #3b4552;
+    --head: #f4f6f8;
+    --zebra: #f4f6f8;
     --pop1: #e2382f;
     --pop2: #2168c3;
     --pop3: #189a54;
@@ -38,7 +38,7 @@
   input[type="checkbox"] { width: 17px; height: 17px; cursor: pointer; margin: 0; }
   body {
     margin: 0; color: var(--ink); background: #fff;
-    font-family: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'Yu Gothic', sans-serif;
+    font-family: 'Figtree', 'IBM Plex Sans JP', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
     font-size: 13px;
     /* 横スクロールバーが出たり消えたりすると高さが変わり、Streamlitとの
        「高さを送る→renderが返る」の往復が止まらなくなるので、はみ出させない */
@@ -65,8 +65,8 @@
     background: #fff; color: var(--ink);
     border-color: var(--line-strong); border-bottom: 2px solid #fff;
   }
-  .tab.empty { color: #b3b8b3; }
-  .tab .n { font-weight: 400; font-size: 11px; margin-left: 5px; color: #9aa09a; }
+  .tab.empty { color: #b4bdc8; }
+  .tab .n { font-weight: 400; font-size: 11px; margin-left: 5px; color: #94a0ae; }
 
   /* --- 中身（タブを切り替えるたびにふわっと入れ替わる） --- */
   .panel { padding: 12px 2px 4px; }
@@ -103,10 +103,10 @@
   thead th { background: var(--head); font-size: 12px; color: #444; white-space: nowrap; }
   .num {
     display: inline-block; min-width: 24px; padding: 2px 0; text-align: center;
-    border: 1px solid #c9cfc9; border-radius: 3px; font-weight: 700; font-size: 13px;
+    border: 1px solid #b4bdc8; border-radius: 3px; font-weight: 700; font-size: 13px;
   }
   .odds { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .odds.miss { color: #b3b8b3; }
+  .odds.miss { color: #b4bdc8; }
   .pop { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   .pop[data-rank="1"] { color: var(--pop1); font-weight: 700; }
   .pop[data-rank="2"] { color: var(--pop2); font-weight: 700; }
@@ -115,7 +115,7 @@
   /* --- 単勝・複勝の一覧（1つの表に両方の列を並べる） --- */
   table.single { width: 100%; max-width: 760px; }
   table.single tbody tr { cursor: pointer; }          /* 行のどこを押してもチェックが入る */
-  table.single tbody tr:hover { background: #f2f7f4; }
+  table.single tbody tr:hover { background: #f4f6f8; }
   table.single td { padding: 6px 8px; }
   table.single td.name { text-align: left; }
   table.single tbody tr:nth-child(even) { background: var(--zebra); }
@@ -171,7 +171,7 @@
     display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer;
     font-size: 13px; line-height: 1.7;
   }
-  .slot label:hover { background: #f2f7f4; }
+  .slot label:hover { background: #f4f6f8; }
   /* 幅があるときは馬名を省略しない（狭いときだけ … で切る） */
   .slot label .nm {
     flex: 1 1 auto; min-width: 0;
@@ -200,7 +200,7 @@
   table.combos { width: 100%; max-width: 500px; }
   table.combos tbody tr { cursor: pointer; }      /* 行のどこを押しても選べる */
   table.combos tbody tr:nth-child(even) { background: var(--zebra); }
-  table.combos tbody tr:hover { background: #f2f7f4; }
+  table.combos tbody tr:hover { background: #f4f6f8; }
   table.combos td.combo { white-space: nowrap; }
   table.combos .tick { width: 42px; text-align: center; }
   /* 組み合わせの一覧。横に広がると馬番とオッズが離れて読みにくいので幅を抑える */
@@ -248,7 +248,7 @@
   .g-head .kind { color: var(--muted); font-size: 12px; }
   .g-head .pts { margin-left: auto; color: var(--accent); font-weight: 700; }
   .g-head .x {
-    appearance: none; border: none; background: none; color: #b3b8b3;
+    appearance: none; border: none; background: none; color: #b4bdc8;
     cursor: pointer; font-size: 13px; padding: 0 2px; font-family: inherit;
   }
   .g-head .x:hover { color: var(--pop1); }
@@ -290,15 +290,15 @@
      角丸なし・2pxの罫線・緑のアクセント。色の値は README のトークンのまま。
      ===================================================================== */
   :root {
-    --line: #d7d3d3;            /* neutral-300（行の区切り） */
-    --line-strong: #201e1d;     /* 主の罫線 */
-    --ink: #201e1d;
-    --muted: #7d7979;           /* neutral-600 */
-    --accent: #1a7f4b;
-    --accent-700: #0f5632;
-    --head: #201e1d;            /* 表の見出し行は黒地・白文字 */
+    --line: #d5dbe2;            /* neutral-300（行の区切り） */
+    --line-strong: #171c23;     /* 主の罫線 */
+    --ink: #171c23;
+    --muted: #6f7c8b;           /* neutral-600 */
+    --accent: #3b4552;
+    --accent-700: #535f6d;
+    --head: #171c23;            /* 表の見出し行は黒地・白文字 */
     --zebra: transparent;
-    --selected: #f8f4f4;        /* neutral-100（選んだ行・買い目） */
+    --selected: #f4f6f8;        /* neutral-100（選んだ行・買い目） */
     --pop1: #e2382f;
     --pop2: #2168c3;
     --pop3: #189a54;
@@ -306,7 +306,7 @@
   /* 2026-10 の新デザイン（角丸の白いカード・ピル・弱い影）。角を0にそろえていた指定はやめた */
   body {
     background: transparent;
-    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    font-family: 'Figtree', 'IBM Plex Sans JP', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
   }
   .wrap { gap: 32px; }
   .slip { flex: 1 1 340px; max-width: 420px; }
@@ -321,47 +321,47 @@
   }
   .tab:hover { background: #fff; color: var(--ink); }
   .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
-  .tab.empty { color: #9b9797; }
+  .tab.empty { color: #94a0ae; }
   .tab[aria-selected="true"].empty { color: #fff; }
   .tab .n { font-size: 11px; font-weight: 400; margin-left: 6px; color: var(--muted); }
-  .tab[aria-selected="true"] .n { color: #c4e3d1; }
+  .tab[aria-selected="true"] .n { color: #d5dbe2; }
 
   .panel { padding: 20px 0 4px; }
   .head-line { gap: 12px; margin-bottom: 10px; }
-  .head-line strong { font-size: 16px; font-weight: 900; }
+  .head-line strong { font-size: 16px; font-weight: 700; }
   /* 更新マーク: 取り込める印だと分かるよう、枠を太くして緑にする */
   .refresh {
-    border: none; border-radius: 999px; background: #e1dfde; color: var(--ink);
+    border: none; border-radius: 6px; background: #e8ecf0; color: var(--ink);
     padding: 4px 12px; font-size: 11px; font-weight: 700;
   }
   .refresh:hover { color: #fff; background: var(--accent); }
   .chip-text { font-size: 11px; font-weight: 700; }
   /* 未取得: 点線の枠を大きくして、取り込めばよいことを目立たせる */
   .empty-box {
-    border: 2px dashed #bab6b6; border-radius: 16px; padding: 40px 24px; font-size: 13px; color: #605d5d;
+    border: 1.5px dashed #b4bdc8; border-radius: 6px; padding: 40px 24px; font-size: 13px; color: #535f6d;
   }
   .note { color: var(--muted); }
 
   /* 表: 白い角丸カード、見出し行は薄い灰、行は細い区切り線 */
   table {
-    border: none; border-collapse: separate; border-spacing: 0; border-radius: 16px; overflow: hidden;
-    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.1);
+    border: none; border-collapse: separate; border-spacing: 0; border-radius: 6px; overflow: hidden;
+    background: #fff; box-shadow: 0 0 0 1px #d5dbe2;
   }
   th, td { border: none; border-bottom: 1px solid var(--line); padding: 9px 8px; }
   thead th {
-    background: #e1dfde; color: #3a3836; font-size: 10px; letter-spacing: .06em; border-bottom: none;
+    background: #e8ecf0; color: #3b4552; font-size: 10px; letter-spacing: .06em; border-bottom: none;
   }
   .num {
-    min-width: 26px; height: 26px; line-height: 26px; padding: 0; border: none; border-radius: 7px;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-size: 14px; font-weight: 900;
+    min-width: 26px; height: 26px; line-height: 26px; padding: 0; border: none; border-radius: 4px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-size: 14px; font-weight: 700;
   }
-  .odds { font-family: 'Archivo', 'Noto Sans JP', sans-serif; font-weight: 700; }
-  .odds.miss { color: #bab6b6; }
-  .pop { font-weight: 900; color: var(--muted); }
+  .odds { font-family: 'Figtree', 'IBM Plex Sans JP', sans-serif; font-weight: 700; }
+  .odds.miss { color: #b4bdc8; }
+  .pop { font-weight: 700; color: var(--muted); }
   table.single { max-width: none; }
   table.single td { padding: 9px 10px; }
-  table.single td.name { font-size: 15px; font-weight: 900; }
-  table.single td.odds:nth-of-type(5) { font-size: 17px; font-weight: 900; }
+  table.single td.name { font-size: 15px; font-weight: 700; }
+  table.single td.odds:nth-of-type(5) { font-size: 17px; font-weight: 700; }
   table.single tbody tr:nth-child(even) { background: transparent; }
   table.single tbody tr:hover { background: var(--selected); }
   table.single tbody tr:has(input:checked), table.combos tbody tr:has(input:checked) {
@@ -370,61 +370,63 @@
   table.combos tbody tr:nth-child(even) { background: transparent; }
   table.combos tbody tr:hover { background: var(--selected); }
   table.single td.tick, table.combos .tick { text-align: center; }
-  .scroll { border: none; border-radius: 16px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .scroll { border: none; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px #d5dbe2; }
   .scroll table.combos { box-shadow: none; }
   .scroll table.combos { border: none; }
   table.axis caption {
-    background: #e1dfde; color: #3a3836; border: none; font-size: 11px; padding: 4px 8px;
+    background: #e8ecf0; color: #3b4552; border: none; font-size: 11px; padding: 4px 8px;
   }
 
   /* ボタン: 灰のピル。主ボタン（追加）は緑の塗り */
   .mini {
-    border: none; border-radius: 999px; background: #e1dfde; color: var(--ink);
+    border: none; border-radius: 6px; background: #e8ecf0; color: var(--ink);
     font-weight: 700; padding: 6px 14px;
   }
-  .mini:hover { background: #d4d1d0; color: var(--ink); }
-  .mini.go { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(26,127,75,.35); }
+  .mini:hover { background: #d5dbe2; color: var(--ink); }
+  .mini.go { background: var(--accent); color: #fff; box-shadow: none; }
   .mini.go:hover { background: var(--accent-700); border-color: var(--accent-700); color: #fff; }
   .mini.go[disabled]:hover { background: var(--accent); color: #fff; }
   .modes .mini[aria-pressed="true"], .opts .mini[aria-pressed="true"],
-  .sorts .mini[aria-pressed="true"] { background: #fff; color: #0f5632; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
-  .form-wrap { border: none; border-radius: 16px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-  .slot { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .slot h4 { background: #e1dfde; border-bottom: none; }
+  .sorts .mini[aria-pressed="true"] { background: #fff; color: #535f6d; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+  .form-wrap { border: none; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px #d5dbe2; }
+  .slot { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .slot h4 { background: #e8ecf0; border-bottom: none; }
   .slot label:hover { background: var(--selected); }
-  h3.section { border-left: 4px solid var(--accent); font-weight: 900; }
+  h3.section { border-left: 4px solid var(--accent); font-weight: 700; }
   .count b { color: var(--accent-700); }
 
-  /* 買い目（右）: 白い角丸カード、見出しは薄い灰。まとまりごとの左の帯は券種の色のまま */
-  .slip-box { border: none; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.1); }
+  /* 表の見出し行は濃いスレート（白文字）。資料 2026-10 のブルー版 */
+  thead th { background: #262d37; color: #f4f6f8; border-color: #262d37; }
+  /* 買い目（右）: 小さな角丸のカード、見出しは淡い灰。まとまりごとの左の帯は券種の色のまま */
+  .slip-box { border: none; border-radius: 6px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px #d5dbe2; }
   .slip-box > h3 {
-    background: #e1dfde; border-bottom: none;
-    font: 900 18px 'Archivo', 'Noto Sans JP', sans-serif; padding: 12px 18px;
+    background: #e8ecf0; border-bottom: none;
+    font: 700 18px 'Figtree', 'IBM Plex Sans JP', sans-serif; padding: 12px 18px;
   }
-  .slip-box > h3 .saved { font: 400 11px 'Noto Sans JP', sans-serif; }
-  .slip-empty { padding: 16px 18px; font-size: 12px; line-height: 1.8; color: #605d5d; }
+  .slip-box > h3 .saved { font: 400 11px 'Figtree', 'IBM Plex Sans JP', sans-serif; }
+  .slip-empty { padding: 16px 18px; font-size: 12px; line-height: 1.8; color: #535f6d; }
   .g { padding: 12px 18px 12px 14px; border-bottom: 1px solid var(--line); }
   .g:has(.g-head input:checked) { background: var(--selected); }
-  .g-head .bet { padding: 2px 10px; font-weight: 900; border-radius: 999px; }
+  .g-head .bet { padding: 2px 10px; font-weight: 700; border-radius: 999px; }
   .g-head .pts { color: var(--accent-700); }
-  .g-head .split { border: none; border-radius: 999px; background: #e1dfde; color: var(--ink); }
-  .g-head .split:hover { background: #d4d1d0; color: var(--ink); }
-  .g-head .x { font-size: 16px; color: #9b9797; }
+  .g-head .split { border: none; border-radius: 6px; background: #e8ecf0; color: var(--ink); }
+  .g-head .split:hover { background: #d5dbe2; color: var(--ink); }
+  .g-head .x { font-size: 16px; color: #94a0ae; }
   .g-money { margin-top: 12px; }
   .g-money input {
-    width: 92px; padding: 6px 8px; font-size: 14px; border: 1.5px solid var(--line); border-radius: 10px;
+    width: 92px; padding: 6px 8px; font-size: 14px; border: 1px solid var(--line-strong); border-radius: 4px;
     background: #fff; font-variant-numeric: tabular-nums;
   }
-  .g-money .sub { font-size: 15px; font-weight: 900; }
+  .g-money .sub { font-size: 15px; font-weight: 700; }
   .g-payout { color: var(--accent-700); font-size: 11px; margin-top: 6px; }
   .slip-foot { background: transparent; padding: 14px 18px; border-top: 1px solid var(--line); }
   .slip-foot .refresh-all {
-    border: none; border-radius: 999px; color: var(--ink); background: #e1dfde; padding: 8px 14px;
+    border: none; border-radius: 6px; color: var(--ink); background: #e8ecf0; padding: 8px 14px;
   }
   .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); color: #fff; }
   .slip-total { align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
   .slip-total span:first-child { font-size: 14px; font-weight: 700; }
-  .slip-total .yen { font: 900 28px 'Archivo', 'Noto Sans JP', sans-serif; color: var(--accent-700); }
+  .slip-total .yen { font: 700 28px 'Figtree', 'IBM Plex Sans JP', sans-serif; color: var(--accent-700); }
   /* --- スマホ（payload.layout = "phone"。docs/design_handoff の Mobile 版） -------------
      部品の高さを「画面の高さ − ヘッダー・タブバー」に固定して、中でスクロールさせる。
      下部バー（買い目 N点 ↑）と、下から開く買い目シートは部品の中の fixed で出す。 */
@@ -437,7 +439,7 @@
   body.phone table.single td { height: 44px; }
   body.phone table.single td.name { font-size: 13px; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body.phone .mini, body.phone .refresh { min-height: 44px; }
-  body.phone .acts-line { position: sticky; bottom: 64px; background: #f3f2f2; padding: 6px 0; z-index: 5; }
+  body.phone .acts-line { position: sticky; bottom: 64px; background: #eceef1; padding: 6px 0; z-index: 5; }
   body.phone .slip {
     position: fixed; left: 0; right: 0; bottom: 0; max-width: none; max-height: 85vh;
     overflow-y: auto; background: #fff; z-index: 30; border-top: 2px solid var(--line-strong);
@@ -449,17 +451,17 @@
   body.phone .sheet-close { display: inline-flex; }
   .sheet-close {
     display: none; appearance: none; align-items: center; min-height: 44px; padding: 0 14px;
-    border: none; border-radius: 999px; background: #e1dfde; font: inherit; font-weight: 700;
+    border: none; border-radius: 999px; background: #e8ecf0; font: inherit; font-weight: 700;
   }
   #phone-bar {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 20;
     background: var(--ink); color: #fff; align-items: center; justify-content: space-between;
-    padding: 0 14px; font-weight: 900;
+    padding: 0 14px; font-weight: 700;
   }
   body.phone #phone-bar { display: flex; }
   #phone-bar button {
     appearance: none; min-height: 44px; padding: 0 16px; border: 2px solid #fff;
-    background: transparent; color: #fff; font: inherit; font-weight: 900;
+    background: transparent; color: #fff; font: inherit; font-weight: 700;
   }
   #sheet-backdrop { display: none; position: fixed; inset: 0; background: rgba(32,30,29,.4); z-index: 25; }
   body.phone.sheet-open #sheet-backdrop { display: block; }
@@ -476,38 +478,38 @@
   }
   body.phone .tab:hover { background: #fff; }
   body.phone .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
-  body.phone .tab[aria-selected="true"] .n { color: #c4e3d1; }
-  body.phone .tab.empty { color: #9b9797; }
-  body.phone .tab[aria-selected="true"].empty { color: #fff; }   /* 緑の地では未取得でも白で読めるように */
+  body.phone .tab[aria-selected="true"] .n { color: #d5dbe2; }
+  body.phone .tab.empty { color: #94a0ae; }
+  body.phone .tab[aria-selected="true"].empty { color: #fff; }   /* 濃い地では未取得でも白で読めるように */
   body.phone .panel { padding-top: 12px; }
   body.phone .head-line strong { font-size: 16px; }
   body.phone .refresh {
     min-height: 28px; padding: 4px 12px; border: none; border-radius: 999px !important;
-    background: #e1dfde; color: var(--ink); font-weight: 700;
+    background: #e8ecf0; color: var(--ink); font-weight: 700;
   }
   body.phone .refresh:hover { background: var(--accent); color: #fff; }
   body.phone .note { display: none; }
-  body.phone .empty-box { border-radius: 16px !important; }
+  body.phone .empty-box { border-radius: 6px !important; }
   body.phone table.single { border: none; }
   body.phone table.single td { height: 56px; }
   body.phone table.single td.name { font-size: 14px; }
-  body.phone table.single tbody tr:has(input:checked) { background: #e6f3ec; }
+  body.phone table.single tbody tr:has(input:checked) { background: #f4f6f8; }
   body.phone input[type="checkbox"] { width: 22px; height: 22px; }
-  body.phone .mini { border-radius: 999px !important; }
-  body.phone .mini.go { box-shadow: 0 2px 8px rgba(26,127,75,.35); }
+  body.phone .mini { border-radius: 6px !important; }
+  body.phone .mini.go { box-shadow: none; }
   /* 単勝・複勝の「選んだ馬を〜へ」の段は、スマホでは下のバーの左半分にまとめる */
   body.phone .acts-line { display: none; }
   /* 見出し: 取得時刻の灰のピルと、右端の丸い ↻（全券種をまとめて取り込む） */
   .head-line { display: flex; align-items: center; gap: 10px; }
   .time-chip {
-    font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px !important; background: #e1dfde;
+    font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px !important; background: #e8ecf0;
   }
   /* 取り込みボタン（淡緑のピル。進捗で左から濃くなる） */
   .import-pill {
     margin-left: auto; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px 0 12px;
-    border: none; border-radius: 999px !important; background: #e6f3ec; color: #0f5632;
+    border: none; border-radius: 999px !important; background: #f4f6f8; color: #535f6d;
     font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0,0,0,.1); transition: transform .12s;
+    box-shadow: 0 0 0 1px #d5dbe2; transition: transform .12s;
   }
   .import-pill:active { transform: scale(.96); }
   .import-pill.running { cursor: default; }
@@ -515,13 +517,13 @@
   /* 下の浮いたバー: 左半分「買い目へ追加(N頭)」、右半分「買い目 N点 ▲ ／ 合計」。黒地・角丸18px・影 */
   #phone-bar {
     left: 12px; right: 12px; bottom: 8px; height: 58px; padding: 0; align-items: stretch;
-    border-radius: 18px !important; box-shadow: 0 8px 24px rgba(0,0,0,.3); overflow: hidden;
+    border-radius: 6px !important; box-shadow: 0 8px 24px rgba(0,0,0,.3); overflow: hidden;
   }
   #phone-bar button {
     flex: 1; height: 100%; min-height: 0; border: none; border-radius: 0 !important; padding: 0 10px;
-    background: transparent; color: #fff; font: inherit; font-weight: 900; font-size: 14px;
+    background: transparent; color: #fff; font: inherit; font-weight: 700; font-size: 14px;
   }
-  #phone-bar-add { background: #4a4846 !important; }
+  #phone-bar-add { background: #535f6d !important; }
   #phone-bar-add.on { background: var(--accent) !important; }
   body.phone .panel-add { display: none; }       /* 下のバーの「買い目へ追加(N点)」が同じ働き */
   #phone-bar-open {
@@ -529,7 +531,7 @@
     border-left: 1px solid #555 !important;
   }
   #phone-bar-open span { font-size: 11px; font-weight: 400; }
-  #phone-bar-open b { font: 900 16px 'Archivo', 'Noto Sans JP', sans-serif; }
+  #phone-bar-open b { font: 700 16px 'Figtree', 'IBM Plex Sans JP', sans-serif; }
   /* 単勝・複勝の追加先を選ぶ小さなピル（バーの左半分の上に出す） */
   #phone-bar-choice {
     display: none; position: fixed; left: 12px; bottom: 74px; z-index: 21; gap: 8px; padding: 6px;
@@ -538,14 +540,14 @@
   #phone-bar-choice.open { display: flex; }
   #phone-bar-choice button {
     height: 40px; padding: 0 18px; border: none; border-radius: 999px !important;
-    background: var(--accent); color: #fff; font: inherit; font-weight: 900; font-size: 14px;
+    background: var(--accent); color: #fff; font: inherit; font-weight: 700; font-size: 14px;
   }
   /* 下から開く買い目シート: 上だけ角丸22px */
   body.phone .slip {
-    border-top: none; border-radius: 22px 22px 0 0 !important; box-shadow: 0 -8px 24px rgba(0,0,0,.2);
+    border-top: none; border-radius: 8px 8px 0 0 !important; box-shadow: 0 -8px 24px rgba(0,0,0,.2);
   }
   body.phone .slip-box > h3 { background: transparent; border-bottom: 1px solid var(--line); }
-  body.phone .g-money input { border-radius: 10px !important; border-width: 1.5px; }
+  body.phone .g-money input { border-radius: 4px !important; border-width: 1px; }
   body.phone .g-head .bet { border-radius: 999px !important; }
   body.phone .g-head .split, body.phone .sheet-close, body.phone .slip-foot .refresh-all {
     border-radius: 999px !important;
@@ -557,10 +559,10 @@
   .slip-add-choice.open { display: flex; }
   /* 券種のピル（資料: padding 10px 18px、選択中の件数は淡い緑） */
   .tab { height: auto; padding: 10px 18px; }
-  .tab[aria-selected="true"] .n { color: #d4ecdd; }
-  body.phone .tab[aria-selected="true"] .n { color: #d4ecdd; }
-  table.single { box-shadow: 0 1px 6px rgba(0,0,0,.1); }
-  table.single td.odds:last-of-type { font: 400 13px 'Noto Sans JP', sans-serif; }
+  .tab[aria-selected="true"] .n { color: #e8ecf0; }
+  body.phone .tab[aria-selected="true"] .n { color: #e8ecf0; }
+  table.single { box-shadow: 0 0 0 1px #d5dbe2; }
+  table.single td.odds:last-of-type { font: 400 13px 'Figtree', 'IBM Plex Sans JP', sans-serif; }
   /* 取り込みボタンの ↻／✓ は別の span（資料: 17px） */
   .import-pill .ic { font-size: 17px; line-height: 1; }
   .import-pill .ic:empty { display: none; }
@@ -569,7 +571,7 @@
     width: 36px; height: 36px; padding: 0; justify-content: center; box-shadow: none; flex: none;
   }
   body.phone .import-pill.round .ic { font-size: 18px; }
-  body.phone .import-pill.round.running .ic { font-size: 10px; font-weight: 900; }
+  body.phone .import-pill.round.running .ic { font-size: 10px; font-weight: 700; }
 
   /* 買い目: 帯と券種のピルは緑（資料）。単勝・複勝は枠色の馬番＋馬名 */
   .g { border-left-color: var(--accent) !important; }
@@ -577,29 +579,29 @@
   .g-combos .c-horse { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .g-combos .c-num {
     flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-    font-weight: 900; font-size: 13px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+    font-weight: 700; font-size: 13px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
   }
   .g-combos .c-horse b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .slip-box > h3 { background: #f8f4f4; border-bottom: 1px solid #d4d1d0; }
-  .slip-foot .mini, .slip-foot .refresh-all { border-radius: 14px !important; }
+  .slip-box > h3 { background: #f4f6f8; border-bottom: 1px solid #d5dbe2; }
+  .slip-foot .mini, .slip-foot .refresh-all { border-radius: 6px !important; }
   .slip-foot .refresh-all[disabled] { opacity: .5; }
   .slip-total .yen { font-size: 30px; }
 
   /* --- スマホの単勝・複勝の表（資料: 黒い見出し・行の下線だけ・人気は馬名の下） --- */
   body.phone table.single { background: transparent; box-shadow: none; border-radius: 0 !important; overflow: visible; }
   body.phone table.single thead th {
-    background: #201f1d !important; color: #fff !important; font-size: 10px; font-weight: 400; padding: 8px 6px;
+    background: #262d37 !important; color: #f4f6f8 !important; font-size: 10px; font-weight: 400; padding: 8px 6px;
   }
-  body.phone table.single tbody td { border-bottom: 1px solid #d4d1d0; background: transparent; }
-  body.phone table.single tbody tr:has(input:checked) { background: #f8f4f4; }
+  body.phone table.single tbody td { border-bottom: 1px solid #d5dbe2; background: transparent; }
+  body.phone table.single tbody tr:has(input:checked) { background: #f4f6f8; }
   body.phone table.single td.p .num { width: 26px; height: 26px; border-radius: 0 !important; display: inline-flex;
     align-items: center; justify-content: center; font-size: 13px; }
   body.phone table.single td.name { max-width: none; text-align: left; }
-  body.phone table.single td.name .nm { font-size: 14px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  body.phone table.single td.name .pop { font-size: 11px; font-weight: 900; text-align: left; }
-  body.phone table.single td:nth-child(3) b { font-weight: 900; font-size: 14px; }
-  body.phone table.single td.odds:nth-last-child(2) { font: 900 16px 'Archivo', sans-serif; }
-  body.phone table.single td.odds:last-child { font: 400 11px 'Noto Sans JP', sans-serif; white-space: nowrap; }
+  body.phone table.single td.name .nm { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.phone table.single td.name .pop { font-size: 11px; font-weight: 700; text-align: left; }
+  body.phone table.single td:nth-child(3) b { font-weight: 700; font-size: 14px; }
+  body.phone table.single td.odds:nth-last-child(2) { font: 700 16px 'Figtree', sans-serif; }
+  body.phone table.single td.odds:last-child { font: 400 11px 'Figtree', 'IBM Plex Sans JP', sans-serif; white-space: nowrap; }
 
   /* スマホの下のバー: 下から84px・幅は456pxまで（資料）。追加先の「単勝へ／複勝へ」は白い44pxのピル2つ */
   body.phone #phone-bar {
@@ -610,19 +612,19 @@
     padding: 0; background: transparent; box-shadow: none; border-radius: 0 !important;
   }
   body.phone #phone-bar-choice button {
-    flex: 1; height: 44px; background: #fff; color: #0f5632; font-size: 15px;
+    flex: 1; height: 44px; background: #fff; color: #535f6d; font-size: 15px;
     box-shadow: 0 6px 20px rgba(0,0,0,.3);
   }
   body.phone { padding-bottom: 170px; }
 
   /* スマホの買い目シート（資料: 見出し56px・淡い灰・下に2pxの線・✕） */
-  body.phone .slip { background: #f3f2f2; }
+  body.phone .slip { background: #eceef1; }
   body.phone .slip-box { background: transparent; box-shadow: none; border-radius: 0 !important; }
   body.phone .slip-box > h3 {
-    height: 56px; box-sizing: border-box; padding: 0 12px; background: #f8f4f4; border-bottom: 2px solid #201f1d;
+    height: 56px; box-sizing: border-box; padding: 0 12px; background: #f4f6f8; border-bottom: 1px solid #d5dbe2;
     justify-content: flex-start; font-size: 20px;
   }
-  body.phone .slip-box > h3 .saved { margin-left: 6px; color: #6b6865; }
+  body.phone .slip-box > h3 .saved { margin-left: 6px; color: #6f7c8b; }
   body.phone .sheet-close {
     margin-left: auto; width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center;
     background: transparent; font-size: 20px; font-weight: 400;
@@ -634,13 +636,13 @@
   body.phone .g-money { font-size: 12px; color: var(--ink); }
   body.phone .g-money input {
     width: 100px; height: 44px; box-sizing: border-box; padding: 0 10px; font-size: 16px;
-    border: 2px solid #201f1d; border-radius: 0 !important;
+    border: 1px solid #b4bdc8; border-radius: 4px !important;
   }
   body.phone .g-money .sub { font-size: 16px; }
   body.phone .slip-foot { padding: 14px 12px; }
   body.phone .slip-foot .refresh-all { width: 100%; height: 48px; }
   body.phone .slip-foot .mini {
-    height: 44px; border-radius: 14px !important; background: #e1dfde !important; color: var(--ink) !important;
+    height: 44px; border-radius: 6px !important; background: #e8ecf0 !important; color: var(--ink) !important;
     box-shadow: none;
   }
 
@@ -1288,7 +1290,7 @@
         }
         parts.forEach(function (text) {
           if (horse) return;
-          const item = byNumber[Number(text)] || { number: Number(text), bg: "#eef0ee", fg: "#6b716b" };
+          const item = byNumber[Number(text)] || { number: Number(text), bg: "#e8ecf0", fg: "#6f7c8b" };
           row.appendChild(numberChip(item));
         });
         row.appendChild(el("span", { class: "o", text: oddsText(b, combo) }));
@@ -1492,8 +1494,8 @@
     ]);
     if (running) {
       button.style.background = phone
-        ? "linear-gradient(0deg, #c4e3d1 " + percent + "%, #e6f3ec " + percent + "%)"
-        : "linear-gradient(90deg, #c4e3d1 " + percent + "%, #e6f3ec " + percent + "%)";
+        ? "linear-gradient(0deg, #d5dbe2 " + percent + "%, #f4f6f8 " + percent + "%)"
+        : "linear-gradient(90deg, #d5dbe2 " + percent + "%, #f4f6f8 " + percent + "%)";
       button.setAttribute("disabled", "disabled");
     }
     button.addEventListener("click", function () {
@@ -1787,7 +1789,7 @@
     const cell = el("td", { class: "combo" });
     combo.split("-").forEach(function (text, i) {
       if (i) cell.appendChild(document.createTextNode(" "));
-      const item = byNumber[Number(text)] || { number: Number(text), bg: "#eef0ee", fg: "#6b716b" };
+      const item = byNumber[Number(text)] || { number: Number(text), bg: "#e8ecf0", fg: "#6f7c8b" };
       cell.appendChild(numberChip(item));
     });
     return cell;
@@ -1879,7 +1881,7 @@
       groups[axis].map(Number).sort(function (a, c) { return a - c; }).forEach(function (number) {
         const combo = axis + "-" + number;
         const low = oddsLow(b, combo);
-        const item = byNumber[number] || { number: number, bg: "#eef0ee", fg: "#6b716b" };
+        const item = byNumber[number] || { number: number, bg: "#e8ecf0", fg: "#6f7c8b" };
         body.appendChild(el("tr", {}, [
           el("td", { class: "p" }, [numberChip(item)]),
           el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }),

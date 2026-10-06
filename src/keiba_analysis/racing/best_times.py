@@ -101,7 +101,7 @@ def _style_cell(row: dict) -> str:
     style = classify_run(row.get("corner_passing"), row.get("n_runners"))
     if style is None:
         return DASH
-    color = RUNNING_STYLE_COLORS.get(style, "#6b716b")
+    color = RUNNING_STYLE_COLORS.get(style, "#6f7c8b")
     tooltip = escape(f"通過順位 {row.get('corner_passing')}（{row.get('n_runners')}頭）から判定")
     return f'<span style="color:{color};font-weight:700" title="{tooltip}">{escape(style)}</span>'
 

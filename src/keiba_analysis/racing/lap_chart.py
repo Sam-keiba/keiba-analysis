@@ -8,7 +8,7 @@
 
 - 横軸: スタートからの距離(m)。`race_laps.distance_m`（累計距離）をそのまま使う
 - 縦軸: ラップタイム（秒）
-- **複勝圏内（1〜3着）の走は太く濃く**、着外は細く薄く描く（`place_label`）
+- **最新の走は太線、ほかは細線**で描く（資料 2026-10 ブルー版。`recency`）
 - **点線** = そのレース全体のラップ
 - **実線** = その馬の個別推定ラップ。算出は次のフェーズなので、いまは値が無く描かれない
   （`build_lap_rows` に `estimated_laps` を渡せばそのまま実線で出る）
@@ -44,7 +44,7 @@ X_TITLE = "スタートからの距離(m)"
 Y_TITLE = "ラップタイム（秒）"
 LEGEND_TITLE = "レース（開催・コース・レース名）"
 # 走ごとの線の色（競馬新聞リデザインの5色。直近走から順に使い、足りなければ繰り返す）
-LINE_COLORS = ["#1a7f4b", "#201f1d", "#2b4a6b", "#9a9795", "#b8892b"]
+LINE_COLORS = ["#2f66a3", "#e0701a", "#0f9a8a", "#8a4fbf", "#6f7c8b"]   # 青・橙・青緑・紫・灰（色相が違う）
 
 # 軸は全馬・全レースで固定する（馬同士を見比べられるように）
 X_DOMAIN = [0, 3200]
@@ -56,15 +56,13 @@ CHART_HEIGHT = 300          # 資料どおり横長（凡例はグラフの外�
 DEFAULT_CHART_RUNS = 3   # 資料どおり3走（スライダーで最大5走まで）
 LINE_WIDTH = 3
 
-# 複勝圏内（1〜3着）の走は**太く濃く**、着外は細く薄く描く。
-# 線を見ただけで「good だった走」が分かるようにするためで、
+# 最新の走（先頭の1走）は**太線**、ほかは細線（資料 2026-10 ブルー版）。
 # レースごとの色分け・点線／実線の区別とは**別の軸**として重ねる。
-IN_MONEY = "複勝圏内"
-OUT_OF_MONEY = "着外"
-NO_FINISH = "着順なし"
-PLACE_ORDER = [IN_MONEY, OUT_OF_MONEY, NO_FINISH]
-PLACE_WIDTHS = [4.0, 1.5, 1.5]        # 線の太さ
-PLACE_OPACITIES = [1.0, 0.45, 0.30]   # 濃さ（点にも同じだけ効く）
+LATEST = "最新"
+EARLIER = "以前"
+RECENCY_ORDER = [LATEST, EARLIER]
+RECENCY_WIDTHS = [3.6, 2.4]           # PC
+COMPACT_RECENCY_WIDTHS = [3.4, 2.2]   # スマホ
 
 # レースラップ=点線 / 個別推定ラップ=実線 / 参考値=破線
 LAP_KINDS = [RACE_LAP_KIND, ESTIMATED_LAP_KIND, REFERENCE_LAP_KIND]
@@ -102,15 +100,16 @@ def finish_label(run: dict) -> str:
     return f"{finish} ({detail})" if detail else finish
 
 
-def place_label(run: dict) -> str:
-    """その走が複勝圏内（1〜3着）だったか。線の太さ・濃さを決めるのに使う。
+def mark_recency(rows: list[dict]) -> list[dict]:
+    """行に `recency`（最新／以前）を付ける。**最初に描くレース**（＝新しい走から順に渡した先頭の1走）が最新。
 
-    取消・中止・除外は着順が無いので「着順なし」（着外とは分けて、いちばん薄く描く）。
+    先頭の走にラップが無くて描かれないときも、描かれた中でいちばん新しい走を太線にするため、
+    走の番号ではなく行の並びで決める。
     """
-    position = run.get("finish_position")
-    if position is None:
-        return NO_FINISH
-    return IN_MONEY if int(position) <= 3 else OUT_OF_MONEY
+    first = rows[0]["race"] if rows else None
+    for row in rows:
+        row["recency"] = LATEST if row["race"] == first else EARLIER
+    return rows
 
 
 def build_lap_rows(
@@ -139,13 +138,11 @@ def build_lap_rows(
         finish = finish_label(run)
         name = run.get("race_name") or ""
         # 1走ぶんの線は、点線（レースラップ）も実線（個別推定）も同じ太さ・濃さにする
-        place = place_label(run)
         if include_race_laps:
             for distance, lap in zip(distances, laps, strict=True):
                 rows.append({
                     "race": label, "race_id": run.get("race_id"), "distance_m": distance,
                     "lap_sec": lap, "kind": RACE_LAP_KIND, "finish": finish, "name": name,
-                    "place": place,
                 })
 
         estimated = estimated_laps.get(run_key(run))
@@ -156,9 +153,8 @@ def build_lap_rows(
                 rows.append({
                     "race": label, "race_id": run.get("race_id"), "distance_m": distance,
                     "lap_sec": lap, "kind": kind, "finish": finish, "name": name,
-                    "place": place,
                 })
-    return rows
+    return mark_recency(rows)
 
 
 def build_goal_rows(rows: list[dict]) -> list[dict]:
@@ -186,9 +182,6 @@ def build_goal_rows(rows: list[dict]) -> list[dict]:
 # スマホ（compact）のグラフ本体の高さ。凡例は高さに含めない（autosize が fit-x）ので、
 # 凡例の行数が増えてもグラフは潰れない
 COMPACT_CHART_HEIGHT = 300
-# スマホは着外の線も読めるように、PCほど細く・薄くしない（色で見分けるため）
-COMPACT_PLACE_WIDTHS = [4.0, 2.5, 2.5]
-COMPACT_PLACE_OPACITIES = [1.0, 0.8, 0.8]
 COMPACT_LEGEND_TITLE = "凡例(日付・競馬場・コース・グレード・レース名)"   # スマホの凡例の見出し（資料の文言）
 
 
@@ -251,24 +244,16 @@ def _stroke_dash() -> dict:
     }
 
 
-def _place_emphasis(compact: bool = False) -> dict:
-    """複勝圏内の走を太く濃く、着外を細く薄く（線の層だけに付ける）。
+def _recency_emphasis(compact: bool = False) -> dict:
+    """最新の走を太線に、ほかを細線に（線の層だけに付ける）。
 
-    レースごとの色（`color`）・種別の点線（`strokeDash`）とは別の軸なので、
-    3つを重ねてもぶつからない。凡例はグラフ下の説明文で補う。
-    スマホ（compact）は着外の線も色で見分けられるよう、差を小さくする。
+    レースごとの色（`color`）・種別の点線（`strokeDash`）とは別の軸なので、重ねてもぶつからない。
     """
-    widths = COMPACT_PLACE_WIDTHS if compact else PLACE_WIDTHS
-    opacities = COMPACT_PLACE_OPACITIES if compact else PLACE_OPACITIES
+    widths = COMPACT_RECENCY_WIDTHS if compact else RECENCY_WIDTHS
     return {
         "strokeWidth": {
-            "field": "place", "type": "nominal",
-            "scale": {"domain": PLACE_ORDER, "range": widths},
-            "legend": None,
-        },
-        "opacity": {
-            "field": "place", "type": "nominal",
-            "scale": {"domain": PLACE_ORDER, "range": opacities},
+            "field": "recency", "type": "nominal",
+            "scale": {"domain": RECENCY_ORDER, "range": widths},
             "legend": None,
         },
     }
@@ -309,12 +294,12 @@ def build_lap_spec(rows: list[dict], height: int = CHART_HEIGHT, compact: bool =
 
     line_layer = {
         "data": {"values": rows},
-        # 太さは place で決めるので、markには置かない（encodingが勝つため紛らわしい）
+        # 太さは recency で決めるので、markには置かない（encodingが勝つため紛らわしい）
         "mark": {"type": "line", "point": {"filled": True, "size": 28}},
         "encoding": {
             **_axes(color_legend=True, races=races, compact=compact),
             "strokeDash": _stroke_dash(),
-            **_place_emphasis(compact),
+            **_recency_emphasis(compact),
             "tooltip": [
                 {"field": "race", "type": "nominal", "title": "レース"},
                 {"field": "finish", "type": "nominal", "title": "着順"},
@@ -399,15 +384,13 @@ def build_phase_rows(
 
         finish = finish_label(run)
         name = run.get("race_name") or ""
-        place = place_label(run)
         for kind, values in series:
             for phase, pace in phase_paces(values, distances, distance_m).items():
                 rows.append({
                     "race": label, "race_id": run.get("race_id"), "phase": phase,
                     "pace_sec": pace, "kind": kind, "finish": finish, "name": name,
-                    "place": place,
                 })
-    return rows
+    return mark_recency(rows)
 
 
 def build_finish_rows(rows: list[dict]) -> list[dict]:
@@ -492,12 +475,12 @@ def build_phase_spec(rows: list[dict], height: int = PHASE_CHART_HEIGHT, compact
     races = list(dict.fromkeys(row["race"] for row in rows))
     line_layer = {
         "data": {"values": rows},
-        # 太さは place で決めるので、markには置かない（encodingが勝つため紛らわしい）
+        # 太さは recency で決めるので、markには置かない（encodingが勝つため紛らわしい）
         "mark": {"type": "line", "point": {"filled": True, "size": 60}},
         "encoding": {
             **_phase_axes(rows, races, color_legend=True, compact=compact),
             "strokeDash": _stroke_dash(),
-            **_place_emphasis(compact),
+            **_recency_emphasis(compact),
             "tooltip": [
                 {"field": "race", "type": "nominal", "title": "レース"},
                 {"field": "finish", "type": "nominal", "title": "着順"},
