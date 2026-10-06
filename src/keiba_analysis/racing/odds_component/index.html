@@ -516,7 +516,7 @@
   }
   #phone-bar-add { background: #4a4846 !important; }
   #phone-bar-add.on { background: var(--accent) !important; }
-  body.bar-no-add #phone-bar-add { display: none; }
+  body.phone .panel-add { display: none; }       /* 下のバーの「買い目へ追加(N点)」が同じ働き */
   #phone-bar-open {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
     border-left: 1px solid #555 !important;
@@ -595,6 +595,8 @@
   let appliedSlip = null;            // 取り込み済みのサーバ側の保存時刻
   const picks = {};                  // 券種 -> [{番号: true}, …]（列ごとに選んだ番号）
   const singlePicks = {};            // 単勝・複勝の表で選んだ馬番
+  // 組み合わせの券種（馬連など）のパネルが、スマホの下のバーに知らせる「選んだ点数」と「追加する動き」
+  let phoneCombo = null;
   let mode = "formation";            // 買い方（画面を開いているあいだ覚える）
   const nagashi = {};                // 券種 -> {axes, partners, unit, positions, multi}
   const boxPicks = {};               // 券種 -> {番号: true}（ボックスで選んだ馬）
@@ -664,7 +666,8 @@
   /**
    * スマホの下の浮いたバーと、シートの後ろの暗幕を1回だけ作る（資料 Mobile.dc.html どおり）。
    * 左半分「買い目へ追加(N頭)」、右半分「買い目 N点 ▲ ／ 合計」。
-   * 左半分は単勝・複勝のタブで出す（オッズが未取得でも）。組み合わせの券種はパネルの中の追加ボタンを使う。
+   * 左半分はどのタブでも出す（オッズが未取得でも。資料どおり）。単勝・複勝は選んだ頭数、
+   * 組み合わせの券種（馬連など）はパネルで選んだ点数を出し、押すとパネルの追加と同じ動きをする。
    * 単勝・複勝のように追加先が2つあるタブでは、押すとバーの上に「単勝へ」「複勝へ」を出して選ばせる。
    */
   function ensurePhoneBar() {
@@ -696,11 +699,10 @@
     if (!add) return;
     const t = tab(active);
     const first = t && bet(t.bets[0]);
-    // 単勝・複勝のタブでは、オッズがまだ無くても出す（資料どおり。選べないうちは灰色の0頭のまま）
     const single = !!(first && first.legs === 1);
-    bodyClass("bar-no-add", !single);
-    const n = pickedSingles().length;
-    add.textContent = "買い目へ追加(" + n + "頭)";
+    // 選べないうち（オッズ未取得など）は灰色の0のまま
+    const n = single ? pickedSingles().length : (phoneCombo ? phoneCombo.count : 0);
+    add.textContent = "買い目へ追加(" + n + (single ? "頭)" : "点)");
     add.classList.toggle("on", n > 0);
     hidePhoneChoice();
   }
@@ -721,7 +723,15 @@
 
   function onPhoneAdd() {
     const t = tab(active);
-    if (!t || !pickedSingles().length) return;
+    if (!t) return;
+    const first = bet(t.bets[0]);
+    if (first && first.legs > 1) {           // 組み合わせの券種: パネルの追加と同じ
+      if (!phoneCombo || !phoneCombo.count) return;
+      phoneCombo.run();
+      bodyClass("sheet-open", true);
+      return;
+    }
+    if (!pickedSingles().length) return;
     const bets = t.bets.map(bet).filter(function (b) { return !!b; });
     if (bets.length === 1) { addSinglesTo(bets[0].key); return; }
     const choice = document.getElementById("phone-bar-choice");
@@ -1735,6 +1745,7 @@
       void panel.offsetWidth;            // アニメーションをかけ直す
       panel.classList.add("fade");
     }
+    phoneCombo = null;                    // 組み合わせのパネルを作り直したら、そこで知らせ直す
     updatePhoneAdd();
     const t = tab(active);
     if (!t) { setHeight(); return; }
@@ -1787,7 +1798,8 @@
     const resultHead = el("div", { class: "result-head" });
     const countBox = el("span", { class: "count" });
     const combosBox = el("div", {});
-    const add = el("button", { class: "mini go", type: "button", text: "買い目へ追加" });
+    // スマホではこのボタンを出さず、下のバーの左半分が同じ働きをする（phoneCombo）
+    const add = el("button", { class: "mini go panel-add", type: "button", text: "買い目へ追加" });
     const pickLine = el("div", { class: "pick-line" });
     const pickCount = el("span", { class: "pick-count" });
     let current = [];        // いま出ている組み合わせ
@@ -1810,6 +1822,8 @@
       add.textContent = "買い目へ追加" + (picked.length ? "（" + picked.length + "点）" : "");
       if (picked.length) add.removeAttribute("disabled");
       else add.setAttribute("disabled", "disabled");
+      phoneCombo = { count: picked.length, run: function () { add.click(); } };
+      updatePhoneAdd();
     }
 
     function refresh() {

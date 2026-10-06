@@ -701,7 +701,7 @@ var answer = {
     .map(function (b) { return b.text(); }),
 };
 """, tmp_path)
-    assert answer["order"] == ["count", "sorts", "mini go"]
+    assert answer["order"] == ["count", "sorts", "mini go panel-add"]
     assert answer["labels"] == ["オッズ順", "組み合わせ順", "買い目へ追加"]
 
 
@@ -1388,3 +1388,57 @@ row3.fire("click", { target: name3 });
 var answer = { jumped: !!other.scrolledIntoView, checked: box3.checked };
 """, tmp_path)
     assert answer == {"jumped": False, "checked": True}
+
+
+# --- スマホの下のバー（資料 Mobile.dc.html: 左「買い目へ追加」・右「買い目 N点 ▲」） -------------
+
+PHONE = """
+var P = JSON.parse(JSON.stringify(PAYLOAD)); P.layout = "phone";
+render(P);
+function bar() { return document.getElementById("phone-bar-add"); }
+function slipBets() { return NODES.slip.byClass("bet").map(function (b) { return b.text(); }); }
+"""
+
+
+@needs_jsc
+def test_phone_bar_adds_the_picked_horses_to_win_or_place(script, tmp_path):
+    """単勝・複勝では、左半分を押すと「単勝へ」「複勝へ」を出し、選んだほうへ入れてシートを開く。"""
+    answer = run_component(script, PHONE + """
+var before = bar().text();
+var boxes = NODES.panel.findAll(function (c) { return c.tagName === "input"; });
+boxes[0].click(); boxes[2].click();
+var picked = bar().text();
+bar().click();
+var choice = document.getElementById("phone-bar-choice");
+var options = choice.findAll(function (c) { return c.tagName === "button"; }).map(function (b) { return b.text(); });
+press(choice, "複勝へ");
+var answer = {
+  before: before, picked: picked, options: options, bets: slipBets(),
+  open: NODES.body.classList.contains("sheet-open"), after: bar().text(),
+};
+""", tmp_path)
+    assert answer["before"] == "買い目へ追加(0頭)"
+    assert answer["picked"] == "買い目へ追加(2頭)"
+    assert answer["options"] == ["単勝へ", "複勝へ"]
+    assert answer["bets"] == ["複勝"]
+    assert answer["open"] is True                     # 追加したら買い目シートを開く
+    assert answer["after"] == "買い目へ追加(0頭)"     # 選んでいた馬は外れる
+
+
+@needs_jsc
+def test_phone_bar_adds_the_picked_combinations(script, tmp_path):
+    """馬連などでは、左半分にパネルで選んだ点数が出て、押すとパネルの追加と同じく買い目に入る。"""
+    answer = run_component(script, PHONE + """
+NODES.tabs.children[2].click();                       // 馬連のタブ
+var empty = bar().text();
+var columns = NODES.panel.byClass("slot");
+columns[0].findAll(function (c) { return c.tagName === "input"; })[0].click();
+var second = columns[1].findAll(function (c) { return c.tagName === "input"; });
+second[1].click(); second[2].click();
+var picked = bar().text();
+bar().click();
+var answer = { empty: empty, picked: picked, bets: slipBets(), points: NODES.slip.byClass("pts").map(function (p) { return p.text(); }) };
+""", tmp_path)
+    assert answer["empty"] == "買い目へ追加(0点)"     # 馬連でも左半分を出す
+    assert answer["picked"] == "買い目へ追加(2点)"
+    assert answer["bets"] == ["馬連"] and answer["points"] == ["2点"]

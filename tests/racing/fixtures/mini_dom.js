@@ -228,7 +228,10 @@ function ensureIds(ids) {
   });
 }
 ensureIds(["tabs", "panel", "slip"]);
+// スマホの下のバー・暗幕は body に足される（getElementById で探せるよう NODES に入れておく）
+NODES.body = new Node("body");
 const document = {
+  body: NODES.body,
   createElement: function (t) { return new Node(t); },
   createTextNode: function (t) { return t; },
   getElementById: function (id) {
