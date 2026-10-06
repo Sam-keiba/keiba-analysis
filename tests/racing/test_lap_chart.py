@@ -2,6 +2,7 @@
 
 from keiba_analysis.racing.lap_chart import (
     CHART_HEIGHT,
+    LINE_COLORS,
     DEFAULT_CHART_RUNS,
     IN_MONEY,
     NO_FINISH,
@@ -24,6 +25,7 @@ from keiba_analysis.racing.lap_chart import (
     build_lap_spec,
     build_phase_rows,
     build_phase_spec,
+    legend_items,
     finish_label,
     place_label,
     race_label,
@@ -466,8 +468,8 @@ def test_compact_phase_chart_has_no_labels_at_the_line_ends():
     spec = build_phase_spec(rows, compact=True)
     assert len(spec["layer"]) == 1
     assert spec["padding"]["right"] < 20
-    legend = spec["layer"][0]["encoding"]["color"]["legend"]
-    assert legend["direction"] == "vertical" and legend["columns"] == 1
+    # 凡例はグラフの外にHTMLで出す（legend_items）ので、グラフには付けない
+    assert spec["layer"][0]["encoding"]["color"]["legend"] is None
     assert spec["layer"][0]["encoding"]["x"]["axis"]["labelOverlap"] is False   # 6区分を全部出す
 
 
@@ -510,3 +512,12 @@ def test_compact_lines_out_of_the_money_stay_readable():
     encoding = spec["layer"][0]["encoding"]
     assert min(encoding["opacity"]["scale"]["range"]) >= 0.8
     assert min(encoding["strokeWidth"]["scale"]["range"]) >= 2.5
+
+
+def test_legend_items_follow_the_line_colours_with_the_finish_first():
+    rows = build_phase_rows([{**LONG, "finish_position": 1}])
+    items = legend_items(rows)
+    assert len(items) == 1
+    label, color = items[0]
+    assert label.startswith("1着 ") and color == LINE_COLORS[0] == "#1a7f4b"
+    assert not legend_items(rows, compact=False)[0][0].startswith("1着")

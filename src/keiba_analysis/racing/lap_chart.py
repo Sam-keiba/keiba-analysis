@@ -44,7 +44,7 @@ X_TITLE = "スタートからの距離(m)"
 Y_TITLE = "ラップタイム（秒）"
 LEGEND_TITLE = "レース（開催・コース・レース名）"
 # 走ごとの線の色（競馬新聞リデザインの5色。直近走から順に使い、足りなければ繰り返す）
-LINE_COLORS = ["#e2382f", "#201f1d", "#2b4a6b", "#9a9795", "#b8892b"]
+LINE_COLORS = ["#1a7f4b", "#201f1d", "#2b4a6b", "#9a9795", "#b8892b"]
 
 # 軸は全馬・全レースで固定する（馬同士を見比べられるように）
 X_DOMAIN = [0, 3200]
@@ -189,7 +189,7 @@ COMPACT_CHART_HEIGHT = 300
 # スマホは着外の線も読めるように、PCほど細く・薄くしない（色で見分けるため）
 COMPACT_PLACE_WIDTHS = [4.0, 2.5, 2.5]
 COMPACT_PLACE_OPACITIES = [1.0, 0.8, 0.8]
-COMPACT_LEGEND_TITLE = "凡例（着順・日付・競馬場・コース・グレード・レース名）"
+COMPACT_LEGEND_TITLE = "凡例(日付・競馬場・コース・グレード・レース名)"   # スマホの凡例の見出し（資料の文言）
 
 
 def _compact_y_axis(domain: list[float]) -> dict:
@@ -203,7 +203,7 @@ def _compact_y_axis(domain: list[float]) -> dict:
 def _color(color_legend: bool, races: list[str], compact: bool = False) -> dict:
     """レースごとの色と凡例（200m版・3区分版で共通）。
 
-    PCは下に小さく横並び。スマホ（compact）は横に並べると切れるので、下に1列で縦に並べる。
+    PCは下に小さく横並び。スマホ（compact）はグラフの外にHTMLで縦に並べる（`legend_items`）。
     """
     legend = {
         # 主役はグラフ本体なので、凡例は下に小さく・横並びで出す
@@ -212,21 +212,25 @@ def _color(color_legend: bool, races: list[str], compact: bool = False) -> dict:
         "symbolSize": 80, "labelLimit": 215, "rowPadding": 2,
         "columnPadding": 10, "titlePadding": 4,
     }
-    if compact:
-        legend.update({
-            "direction": "vertical", "columns": 1, "labelLimit": 360, "rowPadding": 6,
-            "labelFontSize": 13, "symbolStrokeWidth": 4, "symbolSize": 200,
-            "title": COMPACT_LEGEND_TITLE, "titleFontWeight": "normal", "titleColor": "#6b6865",
-            "titlePadding": 8, "offset": 14,
-        })
     return {
         "field": "race",
         "type": "nominal",
         "title": LEGEND_TITLE,
         "sort": races,
         "scale": {"range": LINE_COLORS},
-        "legend": legend if color_legend else None,
+        "legend": legend if color_legend and not compact else None,
     }
+
+
+def legend_items(rows: list[dict], compact: bool = True) -> list[tuple[str, str]]:
+    """グラフの外に出す凡例の (ラベル, 線の色)。グラフの線と同じ順・同じ色。
+
+    スマホ（compact）はラベルの頭に着順を付ける（グラフの線の右端に着順を出さないため）。
+    """
+    if compact:
+        rows = _with_finish_in_legend(rows)
+    races = list(dict.fromkeys(row["race"] for row in rows))
+    return [(race, LINE_COLORS[i % len(LINE_COLORS)]) for i, race in enumerate(races)]
 
 
 def _with_finish_in_legend(rows: list[dict]) -> list[dict]:

@@ -16,16 +16,10 @@ from keiba_analysis.shared.race_name import LEGACY_CLASSES, display_race_name, m
 
 DASH = "—"
 
-# JRA公式のレース結果ページへのリンクに出すフィルムのアイコン。
+# JRA公式のレース結果ページへのリンクに出す動画のアイコン（▶。docs/design_handoff の動画アイコン）。
 # 馬柱（past_grid.py）と開催の勝ちタイム（meeting.py）の両方から使う。
-FILM_SVG = (
-    '<svg viewBox="0 0 18 13" width="18" height="13" aria-hidden="true">'
-    '<rect x="0.6" y="0.6" width="16.8" height="11.8" rx="2" fill="#ffffff" stroke="currentColor"'
-    ' stroke-width="1.2"/>'
-    '<path d="M4.4 1v11M13.6 1v11" stroke="currentColor" stroke-width="1.1"/>'
-    '<path d="M7.2 3.9 11.2 6.5 7.2 9.1z" fill="currentColor"/>'
-    "</svg>"
-)
+# 枠の有無・大きさは画面側のCSS（.play-icon）で決める（PCの馬柱は枠なしの ▶、スマホは小さな四角に ▶）。
+FILM_SVG = '<span class="play-icon" aria-hidden="true">▶</span>'
 JRA_LINK_TITLE = "JRA公式のレース結果ページ（レース映像が見られます）"
 
 

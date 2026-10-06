@@ -164,7 +164,7 @@ def test_each_race_links_to_the_jra_result_page():
     html = meeting.render_meeting([row(jra_cname="pw01sde01/DC")])
     cell = html.split("<td class='mt-detail'>")[1].split("</td>")[0]
     assert "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde01/DC" in cell
-    assert "<svg" in cell
+    assert "play-icon" in cell
 
 
 def test_a_race_without_a_token_shows_no_icon():
