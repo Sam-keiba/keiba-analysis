@@ -377,12 +377,12 @@
     background: #e8ecf0; color: #3b4552; border: none; font-size: 11px; padding: 4px 8px;
   }
 
-  /* ボタン: 灰のピル。主ボタン（追加）は緑の塗り */
+  /* ボタン: 白地に細い枠・角丸6px（資料の btn-secondary）。主ボタン（追加）は濃いスレートの塗り */
   .mini {
-    border: none; border-radius: 6px; background: #e8ecf0; color: var(--ink);
+    border: 1px solid #b4bdc8; border-radius: 6px; background: #fbfbfc; color: var(--ink);
     font-weight: 700; padding: 6px 14px;
   }
-  .mini:hover { background: #d5dbe2; color: var(--ink); }
+  .mini:hover { background: #f4f6f8; color: var(--ink); }
   .mini.go { background: var(--accent); color: #fff; box-shadow: none; }
   .mini.go:hover { background: var(--accent-700); border-color: var(--accent-700); color: #fff; }
   .mini.go[disabled]:hover { background: var(--accent); color: #fff; }
@@ -409,7 +409,7 @@
   .g:has(.g-head input:checked) { background: var(--selected); }
   .g-head .bet { padding: 2px 10px; font-weight: 700; border-radius: 999px; }
   .g-head .pts { color: var(--accent-700); }
-  .g-head .split { border: none; border-radius: 6px; background: #e8ecf0; color: var(--ink); }
+  .g-head .split { border: 1px solid #b4bdc8; border-radius: 6px; background: #fbfbfc; color: var(--ink); }
   .g-head .split:hover { background: #d5dbe2; color: var(--ink); }
   .g-head .x { font-size: 16px; color: #94a0ae; }
   .g-money { margin-top: 12px; }
@@ -421,7 +421,7 @@
   .g-payout { color: var(--accent-700); font-size: 11px; margin-top: 6px; }
   .slip-foot { background: transparent; padding: 14px 18px; border-top: 1px solid var(--line); }
   .slip-foot .refresh-all {
-    border: none; border-radius: 6px; color: var(--ink); background: #e8ecf0; padding: 8px 14px;
+    border: 1px solid #b4bdc8; border-radius: 6px; color: var(--ink); background: #fbfbfc; padding: 8px 14px;
   }
   .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); color: #fff; }
   .slip-total { align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
@@ -642,7 +642,7 @@
   body.phone .slip-foot { padding: 14px 12px; }
   body.phone .slip-foot .refresh-all { width: 100%; height: 48px; }
   body.phone .slip-foot .mini {
-    height: 44px; border-radius: 6px !important; background: #e8ecf0 !important; color: var(--ink) !important;
+    height: 44px; border-radius: 6px !important; background: #fbfbfc !important; color: var(--ink) !important;
     box-shadow: none;
   }
 
