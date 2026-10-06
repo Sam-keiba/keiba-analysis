@@ -463,6 +463,7 @@
      角丸・ピル・弱い影。上の `* { border-radius: 0 !important }`（PCのModernist）より
      強いセレクタで、スマホのときだけ角を戻す。動きはPCと同じで、見た目だけを変える。 */
   body.phone { padding-bottom: 150px; }
+  body.phone .wrap { padding: 4px 12px 0; }     /* 画面の端に付かないよう左右12px（下のバーと同じ） */
   body.phone .tabs { gap: 8px; padding: 2px 2px 8px; border-bottom: none; }
   body.phone .tab {
     height: 40px; margin: 0; padding: 0 16px; border: none; border-radius: 999px !important;
