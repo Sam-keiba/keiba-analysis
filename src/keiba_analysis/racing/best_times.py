@@ -23,7 +23,9 @@ from html import escape
 from keiba_analysis.racing.past_runs import SURFACE_SHORT, pace_mark
 from keiba_analysis.racing.race_forecast import format_race_time
 from keiba_analysis.racing.running_style import classify_run
-from keiba_analysis.shared.style import FINISH_COLORS, RUNNING_STYLE_COLORS, waku_color
+from keiba_analysis.shared.style import RUNNING_STYLE_COLORS, waku_color
+
+PLACED_COLOR = "#189a54"
 
 DASH = "—"
 NEIGHBOUR_DISTANCE_M = 200  # 前後にいくつ離れた距離まで見るか
@@ -85,11 +87,11 @@ def _finish_cell(row: dict) -> str:
     position = row.get("finish_position")
     if not position:
         return DASH
-    colors = FINISH_COLORS.get(position)
     text = f"{position}着"
-    if colors is None:
+    # 3着以内は緑の太字（docs/design_handoff の持ちタイム。着順ごとに色を変えない）
+    if position > 3:
         return escape(text)
-    return f'<span style="color:{colors[1]};font-weight:700">{escape(text)}</span>'
+    return f'<span style="color:{PLACED_COLOR};font-weight:700">{escape(text)}</span>'
 
 
 def _style_cell(row: dict) -> str:

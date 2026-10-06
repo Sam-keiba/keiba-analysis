@@ -217,3 +217,25 @@ def test_the_winner_is_a_dash_without_results():
     html = meeting.render_meeting([row()])
     assert html.split("<td class='mt-waku'>")[1].split("</td>")[0] == "—"
     assert html.split("<td class='mt-horse'>")[1].split("</td>")[0] == "<div>—</div>"
+
+
+# --- スマホのカード型 ---------------------------------------------------------------
+
+
+def test_cards_show_race_winner_and_run_in_three_lines():
+    """スマホは1レース1枚（資料の winRows）: R・クラス・距離・レース名／勝ち馬・タイム／馬場・脚質・上り・ペース。"""
+    html = meeting.render_meeting_cards([row(
+        race_no=9, winner_umaban=7, winner_waku=4, winner_name="サクラミライ", winner_last_3f=34.0,
+    )])
+    assert "<table" not in html
+    assert ">9R<" in html and ">2勝<" in html and ">1600m<" in html and "テスト特別" in html
+    assert ">7</span>" in html and "サクラミライ" in html and "1:32.6" in html
+    assert "良 ／ ク8.6 ／ " in html and RUNNING_STYLE_COLORS["逃げ"] in html
+    assert "上34.0 ／ 前後3F 34.2-34.5" in html and "pg-pace" in html
+
+
+def test_cards_without_a_winner_fall_back_to_dashes():
+    html = meeting.render_meeting_cards([row(race_name="<b>x</b>")])
+    assert "&lt;b&gt;x&lt;/b&gt;" in html
+    assert f"<span>{meeting.DASH}</span>" in html and f"上{meeting.DASH}" in html
+    assert meeting.render_meeting_cards([]) == ""

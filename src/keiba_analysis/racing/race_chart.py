@@ -3,7 +3,7 @@
 計算は race_forecast.py。作りは他のグラフと同じで、**`$schema` は書かない**
 （Altairを使わず素の定義を渡し、Streamlit同梱のVega-Liteの版に合わせる）。
 
-- **点線＝同条件の平均ラップ**（薄い帯は区間ごとの±1標準偏差）
+- **破線＝同条件の平均ラップ**（薄い帯は区間ごとの±1標準偏差）
 - **実線＝本日の想定ラップ**（メンバーと想定クッション値で補正したもの）
 縦軸は他のラップグラフと同じく**上へ行くほど速い**向きにする。
 """
@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 from keiba_analysis.racing.race_forecast import AverageLaps
-from keiba_analysis.shared.style import SURFACE_BADGE
 
 AVERAGE_KIND = "同条件の平均"
 PROJECTED_KIND = "本日の想定"
@@ -19,10 +18,12 @@ PROJECTED_KIND = "本日の想定"
 X_TITLE = "スタートからの距離(m)"
 Y_TITLE = "区間ラップ（秒）"
 CHART_HEIGHT = 260
-LINE_WIDTH = 2.5
-AVERAGE_COLOR = "#8a93a8"   # 平均は落ち着いた灰青（想定＝馬場の色と見分けられるように）
-BAND_OPACITY = 0.16
-LEGEND_TITLE = "ラップ"
+LINE_WIDTH = 3              # 想定（実線）。平均は 2（docs/design_handoff のラップ想定）
+AVERAGE_WIDTH = 2
+PROJECTED_COLOR = "#1a7f4b"  # 想定はアクセントの緑（馬場の色にはしない。資料どおり）
+AVERAGE_COLOR = "#6b6865"    # 平均は灰の破線
+BAND_COLOR = "#201f1d"
+BAND_OPACITY = 0.07
 
 
 def build_rows(average: AverageLaps, projected: list[float]) -> list[dict]:
@@ -42,22 +43,25 @@ def build_rows(average: AverageLaps, projected: list[float]) -> list[dict]:
 
 
 def _axes(field: str, compact: bool = False) -> dict:
-    """軸。スマホ（compact）は縦軸の見出しを画面側（グラフの上の小さな文字）に出すので、軸には付けない。"""
+    """軸。縦軸の見出しは画面側（グラフの上の小さな文字）に出すので、軸には付けない（PC・スマホとも）。"""
     return {
         "x": {"field": "distance_m", "type": "quantitative", "title": X_TITLE, "scale": {"nice": False}},
         "y": {
             "field": field,
             "type": "quantitative",
-            "title": None if compact else Y_TITLE,
+            "title": None,
             # 他のラップグラフと同じく、上へ行くほど速い
             "scale": {"zero": False, "nice": True, "reverse": True},
         },
     }
 
 
-def projected_color(surface: str | None) -> str:
-    """想定ラップ（実線）の色＝馬場の色。スマホは凡例を画面側のHTMLで描くので、同じ色を使えるように出す。"""
-    return SURFACE_BADGE.get(surface or "", ("#3f9c6d", ""))[0]
+def projected_color(surface: str | None = None) -> str:
+    """想定ラップ（実線）の色。凡例は画面側のHTMLで描くので、同じ色を使えるように出す。
+
+    資料どおり馬場によらず緑（`surface` は前の呼び出し方のために受け取るだけ）。
+    """
+    return PROJECTED_COLOR
 
 
 def build_race_lap_spec(
@@ -66,51 +70,44 @@ def build_race_lap_spec(
 ) -> dict:
     """平均（点線＋ばらつきの帯）と想定（実線）を重ねた定義。
 
-    2本が重なっても見分けられるよう、平均は灰青の点線、想定は馬場の色の実線にし、
-    凡例を下に出す。
+    2本が重なっても見分けられるよう、平均は灰の破線（点なし）、想定は緑の実線（点あり）にする。
+    凡例はグラフの外（画面側のHTML）に出すので、ここでは付けない（PC・スマホとも）。
     """
     rows = build_rows(average, projected)
     color = projected_color(surface)
-    legend = {
-        "orient": "bottom", "direction": "horizontal", "labelFontSize": 11,
-        "titleFontSize": 11, "symbolType": "stroke", "symbolSize": 90,
-    }
     tooltip = [
         {"field": "distance_m", "type": "quantitative", "title": X_TITLE},
         {"field": "average", "type": "quantitative", "title": AVERAGE_KIND, "format": ".2f"},
         {"field": "projected", "type": "quantitative", "title": PROJECTED_KIND, "format": ".2f"},
     ]
     band_layer = {
-        "mark": {"type": "area", "opacity": BAND_OPACITY, "color": AVERAGE_COLOR},
+        "mark": {"type": "area", "opacity": BAND_OPACITY, "color": BAND_COLOR},
         "encoding": {
             "x": _axes("average")["x"],
-            "y": {**_axes("low", compact)["y"], "title": None if compact else Y_TITLE},
+            "y": _axes("low", compact)["y"],
             "y2": {"field": "high"},
         },
     }
     average_layer = {
-        "mark": {"type": "line", "strokeDash": [4, 3], "strokeWidth": LINE_WIDTH,
-                 "point": {"filled": True, "size": 22}},
+        "mark": {"type": "line", "strokeDash": [4, 4], "strokeWidth": AVERAGE_WIDTH},
         "encoding": {
             **_axes("average", compact),
             "color": {
                 "datum": AVERAGE_KIND,
-                "title": LEGEND_TITLE,
                 "scale": {"domain": [AVERAGE_KIND, PROJECTED_KIND], "range": [AVERAGE_COLOR, color]},
-                "legend": None if compact else legend,
+                "legend": None,
             },
             "tooltip": tooltip,
         },
     }
     projected_layer = {
-        "mark": {"type": "line", "strokeWidth": LINE_WIDTH + 0.5, "point": {"filled": True, "size": 38}},
+        "mark": {"type": "line", "strokeWidth": LINE_WIDTH, "point": {"filled": True, "size": 30}},
         "encoding": {
             **_axes("projected", compact),
             "color": {
                 "datum": PROJECTED_KIND,
-                "title": LEGEND_TITLE,
                 "scale": {"domain": [AVERAGE_KIND, PROJECTED_KIND], "range": [AVERAGE_COLOR, color]},
-                "legend": None if compact else legend,
+                "legend": None,
             },
             "tooltip": tooltip,
         },

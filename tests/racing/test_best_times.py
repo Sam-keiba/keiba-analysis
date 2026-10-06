@@ -223,7 +223,7 @@ def test_waku_colour_and_finish_colour():
     html = render_best_times(ENTRIES, ROWS)
     assert 'class="waku" style="background:#000' not in html   # 2枠は白地に黒
     assert ">3<" in html                                        # 馬番を枠色で出す
-    assert "1着" in html and "#c0201a" in html                  # 1着は馬柱と同じ赤
+    assert "1着" in html and "#189a54" in html                  # 3着以内は緑（資料どおり）
     assert "5着" in html                                        # 4着以下は色を付けない
 
 

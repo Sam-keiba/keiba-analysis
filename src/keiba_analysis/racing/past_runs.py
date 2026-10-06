@@ -203,7 +203,9 @@ def pace_mark(run: dict) -> str:
     if mark is None:
         return ""
     tooltip = escape(pace.description(run.get("race_first_3f"), run.get("race_last_3f")))
-    return (f'<span class="pg-pace" style="background:{PACE_COLORS[mark]}" '
+    # 記号ごとのクラス（pace-H など）も付ける。ブラウザは style の色を rgb() に書き換えるので、
+    # 画面側で色を上書きするときは style ではなくクラスで見分ける
+    return (f'<span class="pg-pace pace-{mark}" style="background:{PACE_COLORS[mark]}" '
             f'title="{tooltip}">{mark}</span>')
 
 

@@ -147,6 +147,44 @@ def render_meeting(rows: list[dict]) -> str:
     return "".join(lines)
 
 
+def render_meeting_cards(rows: list[dict]) -> str:
+    """スマホの開催の勝ちタイム。表（`render_meeting`）と同じ中身を、1レース1枚のカード型で縦に並べる
+    （docs/design_handoff/競馬新聞 Mobile.dc.html の winRows）。
+
+    1行目: R ・クラス ・距離 ・レース名
+    2行目: 勝ち馬の馬番・馬名 ／ タイム
+    3行目: 馬場 ／ 硬さ ／ 脚質　　上り ／ 前後3F ペース
+    """
+    if not rows:
+        return ""
+    hardness = hardness_head(rows[0].get("surface"))
+    lines = ["<div class='bt-cards mt-cards'>"]
+    for row in rows:
+        pace = pace_mark({**row, "race_first_3f": row.get("first_3f"), "race_last_3f": row.get("last_3f")})
+        distance = row.get("distance_m")
+        split = split_label(row) or DASH
+        where = " ／ ".join([
+            escape(row.get("going") or DASH), f"{hardness}{escape(hardness_text(row))}", _style_cell(row),
+        ])
+        lines.append(
+            "<div class='mt-card'>"
+            f"<div class='mt-card-head'><b class='mt-card-no'>{row.get('race_no') or DASH}R</b>"
+            f"<b class='mt-card-class'>{escape(class_short(row))}</b>"
+            f"<span class='mt-card-dist'>{f'{distance}m' if distance else DASH}</span>"
+            f"<span class='mt-card-race'>{escape(row.get('race_name') or '')}</span></div>"
+            "<div class='bt-card'>"
+            # 勝ち馬がまだ取り込めていないレースは、馬番の札を出さずに「—」1つだけ
+            f"<b class='bt-card-name'>{_winner_badge(row) if row.get('winner_umaban') is not None else ''}"
+            f"<span>{escape(row.get('winner_name') or DASH)}</span></b>"
+            f"<b class='bt-card-time'>{escape(format_race_time(row.get('time_sec')))}</b>"
+            f"<span class='bt-card-where'>{where}</span>"
+            f"<span class='bt-card-run'>上{escape(_winner_last_3f(row))} ／ 前後3F {escape(split)} {pace}</span>"
+            "</div></div>"
+        )
+    lines.append("</div>")
+    return "".join(lines)
+
+
 def days_without_winner(rows: list[dict]) -> list[str]:
     """勝ち馬の通過順位がまだ入っていない開催日（`YYYY-MM-DD`）。
 
