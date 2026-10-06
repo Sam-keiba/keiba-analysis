@@ -108,6 +108,7 @@ TOTAL_CELL_COLOR = "#eceeec"
 
 # 馬柱の列幅（px）。CSSとHTML（past_grid.py の <colgroup>）の両方から使う。
 # 列幅は <col> で決めるのがいちばん強いので、そちらを正としてここを唯一の出どころにする。
+GRID_MARK_PX = 50        # 予想印（左端。2026-10 の資料で足した列）
 GRID_WAKU_PX = 30        # 枠
 GRID_UMABAN_PX = 30      # 馬番
 GRID_HORSE_PX = 200      # 馬情報（左端の固定列）
@@ -116,10 +117,11 @@ GRID_KINRYO_PX = 46      # 斤量（「57.5」の4文字と見出し「斤量」
 GRID_RUN_PX = 206
 # 固定列（横スクロールしても貼り付く帯）の合計。貼り付ける位置もこの並びから出す。
 GRID_STICKY_LEFT = {
-    "waku": 0,
-    "umaban": GRID_WAKU_PX,
-    "horse": GRID_WAKU_PX + GRID_UMABAN_PX,
-    "kinryo": GRID_WAKU_PX + GRID_UMABAN_PX + GRID_HORSE_PX,
+    "mark": 0,
+    "waku": GRID_MARK_PX,
+    "umaban": GRID_MARK_PX + GRID_WAKU_PX,
+    "horse": GRID_MARK_PX + GRID_WAKU_PX + GRID_UMABAN_PX,
+    "kinryo": GRID_MARK_PX + GRID_WAKU_PX + GRID_UMABAN_PX + GRID_HORSE_PX,
 }
 GRID_FIXED_PX = GRID_STICKY_LEFT["kinryo"] + GRID_KINRYO_PX
 
@@ -127,16 +129,18 @@ GRID_FIXED_PX = GRID_STICKY_LEFT["kinryo"] + GRID_KINRYO_PX
 # 画面の幅は390px前後しかないので、固定の帯（枠・馬番・馬情報・斤量）を細くして、
 # **過去走が1列ぶん見える**ようにする。236px + 176px = 412px で、前走がほぼ収まる。
 MOBILE_MAX_PX = 640
+MOBILE_GRID_MARK_PX = 34
 MOBILE_GRID_WAKU_PX = 24
 MOBILE_GRID_UMABAN_PX = 26
 MOBILE_GRID_HORSE_PX = 150
 MOBILE_GRID_KINRYO_PX = 36
 MOBILE_GRID_RUN_PX = 176
 MOBILE_STICKY_LEFT = {
-    "waku": 0,
-    "umaban": MOBILE_GRID_WAKU_PX,
-    "horse": MOBILE_GRID_WAKU_PX + MOBILE_GRID_UMABAN_PX,
-    "kinryo": MOBILE_GRID_WAKU_PX + MOBILE_GRID_UMABAN_PX + MOBILE_GRID_HORSE_PX,
+    "mark": 0,
+    "waku": MOBILE_GRID_MARK_PX,
+    "umaban": MOBILE_GRID_MARK_PX + MOBILE_GRID_WAKU_PX,
+    "horse": MOBILE_GRID_MARK_PX + MOBILE_GRID_WAKU_PX + MOBILE_GRID_UMABAN_PX,
+    "kinryo": MOBILE_GRID_MARK_PX + MOBILE_GRID_WAKU_PX + MOBILE_GRID_UMABAN_PX + MOBILE_GRID_HORSE_PX,
 }
 # 馬情報の文字の幅（セルの左右のpaddingを引いたぶん）
 MOBILE_HORSE_LINE_PX = MOBILE_GRID_HORSE_PX - 12
@@ -309,6 +313,7 @@ table.past-grid tr.scratched td {{ color: #a6aaa6; text-decoration: line-through
 /* 列幅は <col> で決める。table-layout: fixed のもとでは
    ①<col>の指定 → ②1行目のセルの指定 → ③残りを均等割り の順に効くので、
    ①に書けば中身にもセルにも左右されず、端数の割り振りも起きない。 */
+table.past-grid col.pg-w-mark {{ width: {GRID_MARK_PX}px; }}
 table.past-grid col.pg-w-waku {{ width: {GRID_WAKU_PX}px; }}
 table.past-grid col.pg-w-umaban {{ width: {GRID_UMABAN_PX}px; }}
 table.past-grid col.pg-w-horse {{ width: {GRID_HORSE_PX}px; }}
@@ -363,6 +368,14 @@ table.past-grid tr.pg-jumped .pg-horse, table.past-grid tr.pg-jumped .pg-col-kin
    引き算で書くと列を足したときに**静かにずれる**（実際にそうなっていた）。
    背景は必ず指定する（透けると裏の過去走が見えるため）。
    枠・馬番・斤量は行の高さの**縦中央**にそろえる（文字ブロックの馬情報・過去走だけ上寄せ）。 */
+/* 予想印（左端）。押すと印を選ぶ（keiba-app の grid_marks 部品が受け持つ） */
+table.past-grid .pg-col-mark {{
+    position: sticky; left: {GRID_STICKY_LEFT["mark"]}px;
+    z-index: 2; background: #fff; border-left: none;
+    box-sizing: border-box; width: {GRID_MARK_PX}px; min-width: {GRID_MARK_PX}px;
+    max-width: {GRID_MARK_PX}px;
+    padding: 6px 3px; text-align: center; vertical-align: middle;
+}}
 table.past-grid .pg-col-waku {{
     position: sticky; left: {GRID_STICKY_LEFT["waku"]}px;
     z-index: 2; background: #fff; border-left: none;
@@ -402,10 +415,12 @@ table.past-grid td.pg-col-waku .waku {{
     margin: 0; border: none; border-radius: 3px; font-size: 13px;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);   /* 1枠（白）も輪郭が見えるように */
 }}
+table.past-grid tr:nth-child(even) .pg-col-mark,
 table.past-grid tr:nth-child(even) .pg-col-waku,
 table.past-grid tr:nth-child(even) .pg-col-umaban,
 table.past-grid tr:nth-child(even) .pg-horse,
 table.past-grid tr:nth-child(even) .pg-col-kinryo {{ background: #fafbfa; }}
+table.past-grid th.pg-col-mark,
 table.past-grid th.pg-col-waku,
 table.past-grid th.pg-col-umaban,
 table.past-grid th.pg-horse,
@@ -694,11 +709,16 @@ table.mt-table th {{ text-align: center !important; }}
   .past-grid-hint {{ display: block; }}
   .past-grid-wrap {{ -webkit-overflow-scrolling: touch; }}
   table.past-grid {{ width: auto !important; }}
+  table.past-grid col.pg-w-mark {{ width: {MOBILE_GRID_MARK_PX}px; }}
   table.past-grid col.pg-w-waku {{ width: {MOBILE_GRID_WAKU_PX}px; }}
   table.past-grid col.pg-w-umaban {{ width: {MOBILE_GRID_UMABAN_PX}px; }}
   table.past-grid col.pg-w-horse {{ width: {MOBILE_GRID_HORSE_PX}px; }}
   table.past-grid col.pg-w-kinryo {{ width: {MOBILE_GRID_KINRYO_PX}px; }}
   table.past-grid col.pg-w-run {{ width: {MOBILE_GRID_RUN_PX}px; }}
+  table.past-grid .pg-col-mark {{
+      left: {MOBILE_STICKY_LEFT["mark"]}px; width: {MOBILE_GRID_MARK_PX}px;
+      min-width: {MOBILE_GRID_MARK_PX}px; max-width: {MOBILE_GRID_MARK_PX}px;
+  }}
   table.past-grid .pg-col-waku {{
       left: {MOBILE_STICKY_LEFT["waku"]}px; width: {MOBILE_GRID_WAKU_PX}px;
       min-width: {MOBILE_GRID_WAKU_PX}px; max-width: {MOBILE_GRID_WAKU_PX}px;
