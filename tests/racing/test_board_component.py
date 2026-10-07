@@ -287,6 +287,68 @@ var answer = { a0: colOf("A", 0).children.map(function (c) { return c.dataset.ho
     assert answer == {"a0": ["h3"]}
 
 
+ECHO = """
+function echo(rev, moves) {              // サーバーが返す描画（movesだけ動いた状態）。rev は描くたびに増える番号
+  var p = JSON.parse(JSON.stringify(PAYLOAD)); p.rev = rev; p.version = "v" + rev;
+  p.markers.forEach(function (m) { if (moves[m.horse_id]) { m.tier = moves[m.horse_id][0]; m.column = moves[m.horse_id][1]; } });
+  return p;
+}
+function where(name) {
+  var found = null;
+  ["A", "B", "C", "D"].forEach(function (t) { for (var c = 0; c < 4; c++) {
+    if (colOf(t, c).children.some(function (x) { return x === chipOf(name); })) found = t + c; } });
+  return found;
+}
+"""
+
+
+@needs_jsc
+def test_a_stale_echo_between_two_quick_moves_does_not_undo_the_second(script, tmp_path):
+    """続けて2頭を動かすと、1頭目の保存の返事（2頭目はまだ入っていない）が先に届く。それで描き直すと
+    2頭目が元の段に戻る（D段から動かしても、1回で動かないことがあった）。"""
+    answer = run_board(script, ECHO + """
+render(PAYLOAD); layOut();
+dragTo(chipOf("アドマイヤテラ"), 345, 40);          // h3: C段 → A段の列0
+layOut();
+dragTo(chipOf("シュガークン"), 345, 140);           // h4: D段 → B段の列0（その保存の返事はまだ）
+render(echo(2, {}));                                // 1頭目の保存の前の中身（どちらも動いていない）
+render(echo(3, { h3: ["A", 0] }));                  // 1頭目の保存の返事（2頭目はまだ）
+layOut();
+var answer = { h3: where("アドマイヤテラ"), h4: where("シュガークン") };
+""", tmp_path)
+    assert answer == {"h3": "A0", "h4": "B0"}
+
+
+@needs_jsc
+def test_the_save_coming_back_clears_the_wait_and_other_changes_apply(script, tmp_path):
+    """画面と同じ並びで返ってきたら保存は済み。そのあと別の端末の変更が届いたら、ちゃんと描き直す。"""
+    answer = run_board(script, ECHO + """
+render(PAYLOAD); layOut();
+dragTo(chipOf("アドマイヤテラ"), 345, 40);
+render(echo(2, { h3: ["A", 0] }));                  // 保存の返事（画面と同じ）
+render(echo(3, { h3: ["A", 0], h2: ["C", 1] }));    // 別の端末が h2 を動かした
+layOut();
+var answer = { h3: where("アドマイヤテラ"), h2: where("ロブチェン") };
+""", tmp_path)
+    assert answer == {"h3": "A0", "h2": "C1"}
+
+
+@needs_jsc
+def test_nothing_redraws_while_a_horse_is_being_dragged(script, tmp_path):
+    """持っている最中に描き直すと、持っている馬の要素が消えて、離しても動かない。"""
+    answer = run_board(script, ECHO + """
+render(PAYLOAD); layOut();
+var chip = chipOf("アドマイヤテラ");
+chip.fire("pointerdown", { target: chip, pointerId: 1, clientX: 5, clientY: 5, preventDefault: function () {} });
+chip.fire("pointermove", { clientX: 345, clientY: 40 });
+render(echo(2, { h2: ["C", 1] }));                  // ドラッグの最中に届いた別の中身
+chip.fire("pointerup", {});
+layOut();
+var answer = { h3: where("アドマイヤテラ") };
+""", tmp_path)
+    assert answer == {"h3": "A0"}
+
+
 @needs_jsc
 def test_an_older_redraw_is_thrown_away(script, tmp_path):
     answer = run_board(script, """

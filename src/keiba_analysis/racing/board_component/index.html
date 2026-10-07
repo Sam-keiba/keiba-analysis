@@ -123,7 +123,10 @@
   let columns = ["逃げ", "先行", "差し", "追込"];
   let centers = DEFAULT_CENTERS;
   let raceId = null;           // 馬柱のどの行を探すか（別のレースへ飛ばさないための目印）
-  let waitingSave = false;     // 送った保存が返ってくるのを待っている
+  let pendingSave = false;     // 送った保存が、まだ画面と同じ中身で返ってきていない
+  let pendingSince = 0;        // その保存を送った時刻
+  let dragging = false;        // ドラッグの最中（描き直すと、持っている馬の要素が消える）
+  const PENDING_MS = 10000;    // これだけ待っても返らなければ、保存できなかったとみなしてサーバーの中身に従う
   let appliedVersion = null;   // 最後に描いた中身の符号（同じなら描き直さない）
   let appliedRev = -1;         // 最後に描いたときの番号（これ以下の描画は古いので捨てる）
   let phone = false;
@@ -142,7 +145,8 @@
 
   /** 盤の中身をStreamlitへ送って保存する（**自動保存**。保存ボタンは無い）。 */
   function save() {
-    waitingSave = true;
+    pendingSave = true;
+    pendingSince = Date.now();
     send("streamlit:setComponentValue", {
       value: {
         saved_at: Date.now(),      // 同じ中身でも「保存された」ことが分かるように
@@ -156,6 +160,20 @@
       },
       dataType: "json",
     });
+  }
+
+  /** 盤の並び（段・列・列の中の順）。順番の数字そのものは見ない（サーバーが振り直すことがあるため）。 */
+  function layoutKey(list) {
+    const cells = {};
+    list.forEach(function (m) {
+      const k = m.tier + "/" + m.column;
+      (cells[k] = cells[k] || []).push(m);
+    });
+    return Object.keys(cells).sort().map(function (k) {
+      return k + ":" + cells[k].sort(function (a, b) {
+        return ((a.order || 0) - (b.order || 0)) || ((a.umaban || 0) - (b.umaban || 0));
+      }).map(function (m) { return m.horse_id; }).join(",");
+    }).join(";");
   }
 
   // --- 描く --------------------------------------------------------------------
@@ -301,6 +319,7 @@
     if (node.setPointerCapture) node.setPointerCapture(event.pointerId);
     const startX = event.clientX, startY = event.clientY;
     let moved = false, ghost = null, over = null;
+    dragging = true;
 
     function onMove(e) {
       if (!moved) {
@@ -324,6 +343,7 @@
       node.dataset.dropY = String(e.clientY);
     }
     function onUp() {
+      dragging = false;
       node.removeEventListener("pointermove", onMove);
       node.removeEventListener("pointerup", onUp);
       node.removeEventListener("pointercancel", onUp);
@@ -441,17 +461,23 @@
     const payload = (event.data.args || {}).payload || {};
     raceId = payload.race_id || raceId;
     installBoardLinks();
-    // **自分の保存が返ってきただけ**なら、盤は画面にもう出ているので描き直さない
-    // （このとき届く中身は保存**前**のものでもあるので、なおさら当ててはいけない）
-    if (waitingSave) {
-      waitingSave = false;
-      if (payload.rev != null) appliedRev = payload.rev;
+    // 古い番号の描画は捨てる（順番が入れ替わって届くことがあるため。高さを送るたびに同じ中身も返ってくる）
+    if (payload.rev != null && payload.rev <= appliedRev) return;
+    if (payload.rev != null) appliedRev = payload.rev;
+    const incoming = (payload.markers || []);
+    // 画面にある盤と同じ並びなら、描き直さない（自分の保存が返ってきただけ。描き直すとドラッグ中の馬も消える）
+    if (markers.length && layoutKey(markers) === layoutKey(incoming)) {
+      pendingSave = false;
+      appliedVersion = payload.version || null;
       setHeight();
       return;
     }
-    // 古い番号の描画は捨てる（順番が入れ替わって届くことがあるため）
-    if (payload.rev != null && payload.rev <= appliedRev) return;
-    if (payload.rev != null) appliedRev = payload.rev;
+    // ドラッグの最中は描き直さない（持っている馬の要素が消えて、離しても動かなくなる）
+    if (dragging) return;
+    // 保存を送った直後に届く、**保存前**の中身（保存のたびにPythonが1回、保存の前の中身を先に返す）で
+    // 描き直すと、直前に動かした馬が元の段に戻ってしまう。保存が返るまで、違う中身は当てない
+    if (pendingSave && Date.now() - pendingSince < PENDING_MS) { setHeight(); return; }
+    pendingSave = false;
     if (payload.version && payload.version === appliedVersion) return;
     appliedVersion = payload.version || null;
     lanes = payload.lanes || [];
