@@ -30,13 +30,34 @@ def jra_race_link(row: dict, css_class: str) -> str:
     公式のレース結果ページへ飛ばし、そこの「レース映像」から見てもらう。
     リンクのトークン（`jra_cname`）が無いレースには何も出さない。
     """
-    cname = row.get("jra_cname")
-    if not cname:
+    href = jra_race_url(row)
+    if not href:
         return ""
-    href = config.JRA_RACE_PAGE_URL.format(cname=quote(str(cname), safe="/"))
     return (
         f'<a class="{css_class}" href="{escape(href)}" target="_blank" rel="noopener" '
         f'title="{JRA_LINK_TITLE}">{FILM_SVG}</a>'
+    )
+
+
+def jra_race_url(row: dict) -> str | None:
+    """JRA公式のレース結果ページのURL。リンクのトークン（`jra_cname`）が無いレースは None。"""
+    cname = row.get("jra_cname")
+    if not cname:
+        return None
+    return config.JRA_RACE_PAGE_URL.format(cname=quote(str(cname), safe="/"))
+
+
+def jra_race_name_link(row: dict, label_html: str, css_class: str = "jra-race-link") -> str:
+    """レース名（`label_html`。エスケープ済みのHTML）をJRA公式のレース結果ページへのリンクにする。
+
+    リンクのトークンが無いレースは、リンクにせず `label_html` をそのまま返す。
+    """
+    href = jra_race_url(row)
+    if not href:
+        return label_html
+    return (
+        f'<a class="{css_class}" href="{escape(href)}" target="_blank" rel="noopener" '
+        f'title="{JRA_LINK_TITLE}">{label_html}</a>'
     )
 
 # クラスの短縮表記（表記ゆれは NFKC で正規化してから引く）。

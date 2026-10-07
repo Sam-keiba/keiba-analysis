@@ -43,3 +43,17 @@ def test_race_name_plain_is_used_when_present():
     run = {"race_name": "スプリンG1", "race_name_plain": "スプリンターズS", "grade": "GI"}
     assert pr.format_race_name(run) == "スプリンターズS(GI)"
     assert pr.short_race_label(run) == "GI スプリンターズS"
+
+
+def test_the_race_name_can_be_wrapped_in_the_jra_race_link():
+    from keiba_analysis.racing.past_runs import jra_race_name_link, jra_race_url
+
+    row = {"jra_cname": "pw01sde0106202604060120260920/40"}
+    url = jra_race_url(row)
+    assert url and "accessS.html?CNAME=pw01sde0106202604060120260920/40" in url
+    html = jra_race_name_link(row, "府中牝馬S")
+    assert html.startswith('<a class="jra-race-link"') and html.endswith("府中牝馬S</a>")
+    assert 'target="_blank"' in html and 'rel="noopener"' in html
+    # トークンが無いレースは、リンクにせず文字のまま
+    assert jra_race_url({}) is None
+    assert jra_race_name_link({}, "府中牝馬S") == "府中牝馬S"
