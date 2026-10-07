@@ -346,13 +346,42 @@
   // --- 馬柱との行き来 --------------------------------------------------------------
 
   /** スマホ: 押した馬の詳細を開くよう Python へ伝える（保存とは別の値。`saved_at` は付けない）。 */
-  /** 詳細を開く押下のその場で、履歴を1つ積む。「戻る」で外れたら詳細を閉じる処理は、馬の一覧の部品
-   *  （keiba-app の horse_list_component）が親の __keibaBack を見て行う。 */
+  // --- ブラウザの「戻る」で馬の詳細を閉じる（仕組みと理由は keiba-app の horse_list_component を参照） ---
+  // 履歴は、押された部品（この iframe）自身の window に積む。親の画面に積むとSafariに飛ばされる。
+  const BACK_BUTTON = ".st-key-phone_detail_back button";
+  const backState = { pushed: false, ignore: false };
+  (function installBack() {
+    window.addEventListener("popstate", function () {
+      if (backState.ignore) { backState.ignore = false; return; }
+      if (!backState.pushed) return;
+      backState.pushed = false;                 // 戻るで外れた。詳細を閉じる
+      send("streamlit:setComponentValue", {
+        value: { close: true, race_id: raceId, at: Date.now() },
+        dataType: "json",
+      });
+      try {
+        const button = window.parent.document.querySelector(BACK_BUTTON);
+        if (button) button.click();
+      } catch (e) { /* 親の画面を触れなければ、値だけで閉じる */ }
+    });
+    try {
+      // 「← 馬柱」で閉じるときは、積んだ履歴を自分で戻す
+      const parentDoc = window.parent.document;
+      const onClick = function (e) {
+        const button = e.target && e.target.closest ? e.target.closest(BACK_BUTTON) : null;
+        if (!button || !backState.pushed) return;
+        backState.pushed = false;
+        backState.ignore = true;
+        window.history.back();
+      };
+      parentDoc.addEventListener("click", onClick, true);
+      window.addEventListener("pagehide", function () { parentDoc.removeEventListener("click", onClick, true); });
+    } catch (e) { /* 親の画面を触れない環境では、戻るはこれまでどおり */ }
+  })();
   function pushDetailEntry() {
     try {
-      var S = window.parent.__keibaBack;
-      if (S && !S.pushed) { S.pushed = true; window.parent.history.pushState({ keibaDetail: 1 }, ""); }
-    } catch (e) { /* 親の画面を触れなければ、戻るはこれまでどおり */ }
+      if (!backState.pushed) { backState.pushed = true; window.history.pushState({ keibaDetail: 1 }, ""); }
+    } catch (e) { /* 積めなければ、戻るはこれまでどおり */ }
   }
 
   function openDetail(marker) {
