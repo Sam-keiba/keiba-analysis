@@ -223,7 +223,7 @@ var answer = { a: !!rowA.scrolledIntoView, b: !!rowB.scrolledIntoView,
 
 @needs_jsc
 def test_pressing_a_horse_on_the_phone_opens_its_detail(script, tmp_path):
-    """スマホには馬柱の表が無いので、押した馬の詳細を開くよう Python へ伝える（保存はしない）。"""
+    """親の画面のURLを扱えない環境では、押した馬の詳細を開くよう Python へ値で伝える（保存はしない）。"""
     answer = run_board(script, """
 render(PAYLOAD);
 tap(chipOf("ロブチェン"));
@@ -231,6 +231,36 @@ var answer = { sent: SENT.length, open: SENT[0] && SENT[0].open, race: SENT[0] &
                saved: !!(SENT[0] && SENT[0].saved_at) };
 """, tmp_path, _payload(layout="phone"))
     assert answer == {"sent": 1, "open": "h2", "race": "202606040611", "saved": False}
+
+
+URL_STUB = """
+var assigned = null;
+window.parent.location = { href: "https://example.test/?race=OLD&view=phone", assign: function (u) { assigned = u; } };
+window.parent.sessionStorage = { store: {}, setItem: function (k, v) { this.store[k] = v; } };
+URL = function (href) {
+  var parts = href.split("?");
+  var params = {};
+  (parts[1] || "").split("&").forEach(function (kv) { if (kv) { var p = kv.split("="); params[p[0]] = p[1]; } });
+  this.searchParams = { set: function (k, v) { params[k] = v; } };
+  this.toString = function () {
+    return parts[0] + "?" + Object.keys(params).map(function (k) { return k + "=" + params[k]; }).join("&");
+  };
+};
+"""
+
+
+@needs_jsc
+def test_pressing_a_horse_on_the_phone_moves_to_its_detail_page(script, tmp_path):
+    """スマホは、押した馬の詳細つきのURLへページごと移る（Safariの戻るで馬柱に戻れるように）。値は送らない。"""
+    answer = run_board(script, URL_STUB + """
+render(PAYLOAD);
+tap(chipOf("ロブチェン"));
+var answer = { url: assigned, sent: SENT.length, mark: window.parent.sessionStorage.store.keiba_detail_from_list };
+""", tmp_path, _payload(layout="phone"))
+    assert answer["sent"] == 0
+    assert answer["mark"] == "1"
+    url = answer["url"]
+    assert "race=202606040611" in url and "horse=h2" in url and "view=phone" in url
 
 
 @needs_jsc

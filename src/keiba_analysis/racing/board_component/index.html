@@ -345,48 +345,23 @@
 
   // --- 馬柱との行き来 --------------------------------------------------------------
 
-  /** スマホ: 押した馬の詳細を開くよう Python へ伝える（保存とは別の値。`saved_at` は付けない）。 */
-  // --- ブラウザの「戻る」で馬の詳細を閉じる（仕組みと理由は keiba-app の horse_list_component を参照） ---
-  // 履歴は、押された部品（この iframe）自身の window に積む。親の画面に積むとSafariに飛ばされる。
-  const BACK_BUTTON = ".st-key-phone_detail_back button";
-  const backState = { pushed: false, ignore: false };
-  (function installBack() {
-    window.addEventListener("popstate", function () {
-      if (backState.ignore) { backState.ignore = false; return; }
-      if (!backState.pushed) return;
-      backState.pushed = false;                 // 戻るで外れた。詳細を閉じる
-      send("streamlit:setComponentValue", {
-        value: { close: true, race_id: raceId, at: Date.now() },
-        dataType: "json",
-      });
-      try {
-        const button = window.parent.document.querySelector(BACK_BUTTON);
-        if (button) button.click();
-      } catch (e) { /* 親の画面を触れなければ、値だけで閉じる */ }
-    });
-    try {
-      // 「← 馬柱」で閉じるときは、積んだ履歴を自分で戻す
-      const parentDoc = window.parent.document;
-      const onClick = function (e) {
-        const button = e.target && e.target.closest ? e.target.closest(BACK_BUTTON) : null;
-        if (!button || !backState.pushed) return;
-        backState.pushed = false;
-        backState.ignore = true;
-        window.history.back();
-      };
-      parentDoc.addEventListener("click", onClick, true);
-      window.addEventListener("pagehide", function () { parentDoc.removeEventListener("click", onClick, true); });
-    } catch (e) { /* 親の画面を触れない環境では、戻るはこれまでどおり */ }
-  })();
-  function pushDetailEntry() {
-    try {
-      if (!backState.pushed) { backState.pushed = true; window.history.pushState({ keibaDetail: 1 }, ""); }
-    } catch (e) { /* 積めなければ、戻るはこれまでどおり */ }
-  }
-
+  /**
+   * スマホ: 押した馬の詳細を開く。`?race=…&horse=…&view=phone` のURLへページごと移る
+   * （Safariの戻るで馬柱に戻れるように。仕組みと理由は keiba-app の horse_list_component を参照）。
+   * 親の画面に触れない環境だけ、今までどおり値を送って Python に開いてもらう（保存とは別の値）。
+   */
   function openDetail(marker) {
     if (!marker.horse_id) return;
-    pushDetailEntry();
+    try {
+      const p = window.parent;
+      const url = new URL(p.location.href);
+      url.searchParams.set("race", raceId);
+      url.searchParams.set("horse", marker.horse_id);
+      url.searchParams.set("view", "phone");
+      try { p.sessionStorage.setItem("keiba_detail_from_list", "1"); } catch (e) { /* 覚えられなくても開ける */ }
+      p.location.assign(url.toString());
+      return;
+    } catch (e) { /* 下の値で開く */ }
     send("streamlit:setComponentValue", {
       value: { open: marker.horse_id, race_id: raceId, at: Date.now() },
       dataType: "json",
