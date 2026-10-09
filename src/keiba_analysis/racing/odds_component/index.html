@@ -1285,8 +1285,8 @@
       });
 
       const amount = el("input", {
-        type: "number", min: "100", step: "100", inputmode: "numeric",
-        value: String(group.amount),
+        type: "number", min: "1", step: "1", inputmode: "numeric",
+        value: String(group.amount / 100),          // 下2桁の「00円」は固定。百の位以上だけ直す
       });
       const sub = el("span", { class: "sub" });
       const payout = el("div", { class: "g-payout" });
@@ -1302,8 +1302,8 @@
       }
       // `change`（入力を終えたとき）だけで保存する。1文字ごとには送らない
       amount.addEventListener("change", function () {
-        group.amount = roundAmount(amount.value);
-        amount.value = String(group.amount);
+        group.amount = roundAmount(Math.round(Number(amount.value) || 0) * 100);
+        amount.value = String(group.amount / 100);
         showSub();
         drawTotals();
         saveSlip();
@@ -1311,7 +1311,7 @@
       showSub();
 
       const money = el("div", { class: "g-money" }, [
-        el("span", { text: "1点" }), amount, el("span", { text: "円" }), sub,
+        el("span", { text: "1点" }), amount, el("span", { text: "00円" }), sub,
       ]);
       list.appendChild(el("div", { class: "g" }, [head, combos, money, payout]));
     });

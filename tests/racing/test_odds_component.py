@@ -1177,7 +1177,7 @@ function odds() { return NODES.slip.byClass("g-combos")[0].byClass("o")
   .map(function (o) { return Number(o.text()); }); }
 var before = { payout: payout(), odds: odds() };
 var box = NODES.slip.byClass("g-money")[0].findAll(function (c) { return c.tagName === "input"; })[0];
-box.value = "300";
+box.value = "3";
 box.fire("change");
 var answer = { before: before, after: payout(), sub: NODES.slip.byClass("sub")[0].text() };
 """, tmp_path)
@@ -1236,7 +1236,7 @@ press(NODES.panel, "買い目へ追加");
 press(NODES.slip, "ばらす");
 var money = NODES.slip.byClass("g-money");
 var box = money[0].findAll(function (c) { return c.tagName === "input"; })[0];
-box.value = "500";
+box.value = "5";
 box.fire("change");
 var answer = {
   subs: NODES.slip.byClass("sub").map(function (s) { return s.text(); }),
@@ -1257,7 +1257,7 @@ def test_saving_the_money_does_not_rebuild_the_slip(script, tmp_path):
 press(NODES.panel, "買い目へ追加");
 var input = NODES.slip.byClass("g-money")[0].findAll(function (c) { return c.tagName === "input"; })[0];
 input.MARK = "同じ要素のまま";
-input.value = "500";
+input.value = "5";
 input.fire("change");
 var saved = SENT[SENT.length - 1];
 // Streamlitが保存を受けて、同じ中身をそのまま返してくる（買い目以外は変わらない）
@@ -1271,7 +1271,7 @@ var answer = { same: again.MARK === "同じ要素のまま", value: again.value,
                sub: NODES.slip.byClass("sub")[0].text() };
 """, tmp_path)
     assert answer["same"] is True          # 作り直していない
-    assert answer["value"] == "500"
+    assert answer["value"] == "5"
     assert answer["sub"] == "1,500円"       # 3点 × 500円
 
 
@@ -1536,3 +1536,22 @@ var answer = { texts: texts, header: h3.text() };
     for gone in ("自動で保存されます", "すべて選択", "すべて解除", "選んだ買い目を削除"):
         assert gone not in answer["texts"]
     assert answer["header"].startswith("買い目↻")
+
+
+@needs_jsc
+def test_the_money_box_holds_only_the_hundreds_and_the_00_yen_is_fixed(script, tmp_path):
+    """入力欄は百の位以上だけ（下2桁の「00円」は固定）。1より小さい数は1（＝100円）にする。"""
+    answer = run_component(script, THREE_COMBOS + """
+press(NODES.panel, "買い目へ追加");
+var row = NODES.slip.byClass("g-money")[0];
+var box = row.findAll(function (c) { return c.tagName === "input"; })[0];
+var start = box.value;
+box.value = "12"; box.fire("change");
+var big = { value: box.value, sub: NODES.slip.byClass("sub")[0].text() };
+box.value = "0"; box.fire("change");
+var answer = { start: start, big: big, zero: box.value, unit: row.text() };
+""", tmp_path)
+    assert answer["start"] == "1"
+    assert answer["big"] == {"value": "12", "sub": "3,600円"}     # 3点 × 1,200円
+    assert answer["zero"] == "1"
+    assert "00円" in answer["unit"]
