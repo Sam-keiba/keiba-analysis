@@ -678,6 +678,12 @@
   // 3連複・3連単は全通りの表が大きすぎるので、オッズの低い順に切って出す
   const TOP_N = 50;
   const DEFAULT_AMOUNT = 100;     // 1点あたりの既定の金額
+
+  /** 馬券は100円単位。金額を100円単位にそろえる（四捨五入。0や空や100円未満は100円）。 */
+  function roundAmount(value) {
+    const unit = 100;
+    return Math.max(unit, Math.round((Number(value) || 0) / unit) * unit);
+  }
   // 買い方（既定は今までどおりフォーメーション）
   const MODES = [
     ["formation", "通常／フォーメーション"],
@@ -1300,7 +1306,7 @@
       });
 
       const amount = el("input", {
-        type: "number", min: "0", step: "100", inputmode: "numeric",
+        type: "number", min: "100", step: "100", inputmode: "numeric",
         value: String(group.amount),
       });
       const sub = el("span", { class: "sub" });
@@ -1317,7 +1323,7 @@
       }
       // `change`（入力を終えたとき）だけで保存する。1文字ごとには送らない
       amount.addEventListener("change", function () {
-        group.amount = Math.max(0, Math.floor(Number(amount.value) || 0));
+        group.amount = roundAmount(amount.value);
         amount.value = String(group.amount);
         showSub();
         drawTotals();
@@ -2136,7 +2142,7 @@
         return {
           group: nextGroup++, bet: group.bet, kind: group.kind || null,
           combos: (group.combos || []).slice(),
-          amount: group.amount == null ? DEFAULT_AMOUNT : group.amount,
+          amount: group.amount == null ? DEFAULT_AMOUNT : roundAmount(group.amount),
         };
       }), betOrder());
     }

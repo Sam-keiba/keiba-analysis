@@ -1512,3 +1512,14 @@ var answer = {
 };
 """, tmp_path)
     assert answer == {"label": "買い目へ追加(2)", "groups": ["複勝:1,3"]}
+
+
+@needs_jsc
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(2, 100), (0, 100), ("", 100), (-300, 100), (100, 100), (149, 100), (150, 200), (1234, 1200), ("500", 500)],
+)
+def test_the_amount_is_rounded_to_100_yen(value, expected, script, tmp_path):
+    """馬券は100円単位。金額は100の倍数にそろえ、最小は100円。"""
+    out = run_js(f"print(roundAmount({json.dumps(value)}));", script, tmp_path, "roundAmount")
+    assert int(out) == expected
