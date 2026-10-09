@@ -1457,7 +1457,7 @@ function pill() { return NODES.panel.find(function (c) { return (c.attrs["class"
 @needs_jsc
 def test_the_import_pill_says_what_it_does(script, tmp_path):
     answer = _pill(script, tmp_path, scenario="var answer = { text: pill().text() };")
-    assert answer["text"] == "↻ この券種を更新"
+    assert answer["text"] == "↻"                   # 文字は出さない
 
 
 @needs_jsc
@@ -1466,7 +1466,7 @@ def test_the_import_pill_fills_with_the_real_progress(script, tmp_path):
 var b = pill();
 var answer = { text: b.text(), disabled: b.attrs.disabled === "disabled", bg: b.style.background };
 """)
-    assert answer["text"] == "取り込み中… 29%"
+    assert answer["text"] == "29%"
     assert answer["disabled"] is True
     assert "29%" in answer["bg"]                    # 淡緑が左から29%まで濃くなる
 
@@ -1474,7 +1474,7 @@ var answer = { text: b.text(), disabled: b.attrs.disabled === "disabled", bg: b.
 @needs_jsc
 def test_the_import_pill_says_when_it_finished(script, tmp_path):
     answer = _pill(script, tmp_path, {"finished": "12:34"}, scenario="var answer = { text: pill().text() };")
-    assert answer["text"] == "✓ 取り込み済み 12:34現在"
+    assert answer["text"] == "✓"
 
 
 @needs_jsc
@@ -1485,7 +1485,7 @@ var answer = { sent: SENT.map(function (v) { return v.kind; }), bets: SENT[0] &&
 """)
     assert answer["sent"] == ["fetch"]
     assert len(answer["bets"]) == 1                 # いま開いている券種だけ（最初のタブ）
-    assert answer["text"] == "取り込み中… 0%"     # 押した直後（最初の進み具合が届くまで）
+    assert answer["text"] == "0%"     # 押した直後（最初の進み具合が届くまで）
 
 
 @needs_jsc

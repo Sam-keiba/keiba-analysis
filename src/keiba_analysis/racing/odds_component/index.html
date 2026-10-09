@@ -566,12 +566,12 @@
   /* 取り込みボタンの ↻／✓ は別の span（資料: 17px） */
   .import-pill .ic { font-size: 17px; line-height: 1; }
   .import-pill .ic:empty { display: none; }
-  /* スマホ: 36pxの丸い ↻ だけ（資料） */
-  body.phone .import-pill.round {
+  /* PC・スマホとも: 36pxの丸い ↻ だけ（文字は出さない） */
+  .import-pill.round {
     width: 36px; height: 36px; padding: 0; justify-content: center; box-shadow: none; flex: none;
   }
-  body.phone .import-pill.round .ic { font-size: 18px; }
-  body.phone .import-pill.round.running .ic { font-size: 10px; font-weight: 700; }
+  .import-pill.round .ic { font-size: 18px; }
+  .import-pill.round.running .ic { font-size: 10px; font-weight: 700; }
 
   /* 買い目: 帯と券種のピルは緑（資料）。単勝・複勝は枠色の馬番＋馬名 */
   .g { border-left-color: var(--accent) !important; }
@@ -1486,23 +1486,18 @@
     // スマホは資料どおり36pxの丸い ↻ だけ（取り込み中は％、済んだら ✓。下から淡緑が濃くなる）
     const icon = running ? percent + "%" : (progress && progress.finished ? "✓" : "↻");
     const button = el("button", {
-      class: "import-pill" + (running ? " running" : "") + (phone ? " round" : ""), type: "button",
-      title: phone ? label : "いま開いている券種だけを更新する", "aria-label": label,
-    }, phone ? [el("span", { class: "ic", text: icon })] : [
-      el("span", { class: "ic", text: icon === "↻" || icon === "✓" ? icon : "" }),
-      el("span", { text: icon === "↻" || icon === "✓" ? label.slice(1) : label }),   // 「 この券種を…」（頭の空白ごと）
-    ]);
+      class: "import-pill" + (running ? " running" : "") + " round", type: "button",
+      title: "いま開いている券種だけを更新する", "aria-label": label,
+    }, [el("span", { class: "ic", text: icon })]);   // 文字は出さない（↻ ／ 取り込み中は％ ／ ✓）
     if (running) {
-      button.style.background = phone
-        ? "linear-gradient(0deg, #d5dbe2 " + percent + "%, #f4f6f8 " + percent + "%)"
-        : "linear-gradient(90deg, #d5dbe2 " + percent + "%, #f4f6f8 " + percent + "%)";
+      button.style.background = "linear-gradient(0deg, #d5dbe2 " + percent + "%, #f4f6f8 " + percent + "%)";
       button.setAttribute("disabled", "disabled");
     }
     button.addEventListener("click", function () {
       if (running) return;
       importing = true;
       button.setAttribute("disabled", "disabled");
-      button.textContent = phone ? "0%" : "取り込み中… 0%";
+      button.textContent = "0%";
       requestFetchMany([active]);
     });
     return button;
