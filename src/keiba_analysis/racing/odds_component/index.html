@@ -112,16 +112,18 @@
   .pop[data-rank="2"] { color: var(--pop2); font-weight: 700; }
   .pop[data-rank="3"] { color: var(--pop3); font-weight: 700; }
 
-  /* --- 人気順の表（単勝・複勝の表と同じ作り。人気・馬番＋馬名・オッズ） --- */
-  table.poprank td.pop { text-align: center; white-space: nowrap; width: 64px; }
-  table.poprank .pr-horses { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-  table.poprank .pr-h { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-  table.poprank .pr-h .nm { font-size: 15px; font-weight: 700; }
-  table.poprank td.pr-odds { text-align: right; white-space: nowrap; font: 700 16px 'Figtree', 'IBM Plex Sans JP', sans-serif; font-variant-numeric: tabular-nums; }
+  /* --- 人気順の表（単勝・複勝の表と同じ作り。人気・馬ごとの列（馬番＋馬名の頭2文字）・オッズ） --- */
+  .scroll.pop-scroll { max-width: none; max-height: none; overflow: visible; border: none; background: transparent; box-shadow: none; }
+  table.poprank { width: 100%; }
+  table.poprank td.pop { text-align: center; white-space: nowrap; }
+  table.poprank td.pr-h { text-align: left; white-space: nowrap; }
+  table.poprank .pr-in { display: inline-flex; align-items: center; gap: 10px; }
+  table.poprank .pr-in .nm { font-size: 15px; font-weight: 700; }
+  table.poprank td.pr-odds { text-align: right; white-space: nowrap; font: 700 17px 'Figtree', 'IBM Plex Sans JP', sans-serif; font-variant-numeric: tabular-nums; }
   table.poprank td.pr-odds.miss { color: #b4bdc8; }
-  body.phone table.poprank td.pop { width: 50px; font-size: 11px; }
-  body.phone table.poprank .pr-horses { flex-direction: column; flex-wrap: nowrap; gap: 4px; }
-  body.phone table.poprank .pr-h .nm { font-size: 14px; }
+  body.phone table.poprank td.pop { font-size: 11px; }
+  body.phone table.poprank .pr-in { gap: 6px; }
+  body.phone table.poprank .pr-in .nm { font-size: 14px; }
   body.phone table.poprank td.pr-odds { font-size: 15px; }
   .more-rows { display: block; margin: 10px auto; }
 
@@ -533,7 +535,7 @@
   }
   #phone-bar-add { background: #535f6d !important; }
   #phone-bar-add.on { background: var(--accent) !important; }
-  body.phone .panel-add { display: none; }       /* 下のバーの「買い目へ追加(N点)」が同じ働き */
+  .panel-add { display: none !important; }      /* PCは買い目パネルの「買い目へ追加(N)」、スマホは下のバーが同じ働き */
   #phone-bar-open {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
     border-left: 1px solid #555 !important;
@@ -1776,18 +1778,19 @@
     return cell;
   }
 
-  /** 人気順の表の「馬番・馬名」。組み合わせの馬ごとに、枠色の馬番と馬名を並べる（枠連は枠の色だけ）。 */
+  /**
+   * 人気順の表の馬の列。組み合わせの馬ごとに1列（1頭目・2頭目…）で、枠色の馬番と馬名の頭2文字を出す
+   * （枠連は枠の色だけ）。
+   */
   function rankedHorses(b, combo) {
     const byNumber = {};
     itemsOf(b).forEach(function (item) { byNumber[item.number] = item; });
-    const list = el("div", { class: "pr-horses" });
-    combo.split("-").forEach(function (text) {
+    return combo.split("-").map(function (text) {
       const item = byNumber[Number(text)] || { number: Number(text), bg: "#e8ecf0", fg: "#6f7c8b" };
       const parts = [numberChip(item)];
-      if (item.name) parts.push(el("span", { class: "nm", text: item.name }));
-      list.appendChild(el("span", { class: "pr-h" }, parts));
+      if (item.name) parts.push(el("span", { class: "nm", text: Array.from(item.name).slice(0, 2).join("") }));
+      return el("td", { class: "pr-h" }, [el("span", { class: "pr-in" }, parts)]);
     });
-    return el("td", { class: "name" }, [list]);
   }
 
   /**
@@ -1845,7 +1848,7 @@
         cells.push(el("td", {
           class: "pop rank", "data-rank": rank <= 3 ? String(rank) : null, text: rank + "人気",
         }));
-        cells.push(rankedHorses(b, combo));
+        rankedHorses(b, combo).forEach(function (td) { cells.push(td); });
         cells.push(el("td", { class: "pr-odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
       } else {
         cells.push(comboCells(b, combo));
@@ -1863,11 +1866,16 @@
     more.addEventListener("click", function () { addRows(); setHeight(); });
     addRows();
     const headCells = [el("th", { class: "tick", text: "選択" })];
-    if (opts.ranked) headCells.push(el("th", { text: "人気" }), el("th", { text: "馬番・馬名" }), el("th", { text: "オッズ" }));
+    if (opts.ranked) {
+      const heads = b.byFrame ? FRAME_HEADS : (b.ordered ? ORDERED_HEADS : UNORDERED_HEADS);
+      headCells.push(el("th", { text: "人気" }));
+      for (let i = 0; i < b.legs; i++) headCells.push(el("th", { text: heads[i] }));
+      headCells.push(el("th", { text: "オッズ" }));
+    }
     else headCells.push(el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }));
     const table = el("table", { class: opts.ranked ? "single poprank" : "combos" }, [el("thead", {}, [el("tr", {}, headCells)]), body]);
     return {
-      node: el("div", { class: "scroll" }, [table, more]),
+      node: el("div", { class: opts.ranked ? "scroll pop-scroll" : "scroll" }, [table, more]),
       sync: function () {
         boxes.forEach(function (pair) { pair.box.checked = picked.isOn(pair.combo); });
       },

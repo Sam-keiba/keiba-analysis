@@ -1590,3 +1590,20 @@ var answer = { start: start, big: big, zero: box.value, unit: row.text() };
     assert answer["big"] == {"value": "12", "sub": "3,600円"}     # 3点 × 1,200円
     assert answer["zero"] == "1"
     assert "00円" in answer["unit"]
+
+
+@needs_jsc
+def test_popular_order_gives_each_horse_its_own_column_with_two_letters(script, tmp_path):
+    """人気順の表は馬ごとに1列（馬連なら1頭目・2頭目）。馬名は頭2文字だけ。"""
+    answer = run_component(script, """
+render(PAYLOAD);
+NODES.tabs.children[2].click();                       // 馬連
+var table = NODES.panel.byClass("poprank")[0];
+var heads = table.findAll(function (c) { return c.tagName === "th"; }).map(function (h) { return h.text(); });
+var row = table.findAll(function (c) { return c.tagName === "tr" && c.byClass("pr-h").length; })[0];
+var answer = { heads: heads, cells: row.byClass("pr-h").length,
+               names: row.byClass("nm").map(function (n) { return n.text().length; }) };
+""", tmp_path)
+    assert answer["heads"] == ["選択", "人気", "1頭目", "2頭目", "オッズ"]
+    assert answer["cells"] == 2
+    assert all(n <= 2 for n in answer["names"])
