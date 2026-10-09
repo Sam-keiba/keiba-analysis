@@ -1457,7 +1457,7 @@ function pill() { return NODES.panel.find(function (c) { return (c.attrs["class"
 @needs_jsc
 def test_the_import_pill_says_what_it_does(script, tmp_path):
     answer = _pill(script, tmp_path, scenario="var answer = { text: pill().text() };")
-    assert answer["text"] == "↻ 全券種を取り込む（約21秒）"
+    assert answer["text"] == "↻ この券種を更新"
 
 
 @needs_jsc
@@ -1478,13 +1478,13 @@ def test_the_import_pill_says_when_it_finished(script, tmp_path):
 
 
 @needs_jsc
-def test_pressing_the_import_pill_asks_for_every_bet_type(script, tmp_path):
+def test_pressing_the_import_pill_asks_only_for_the_open_tab(script, tmp_path):
     answer = _pill(script, tmp_path, scenario="""
 pill().click();
 var answer = { sent: SENT.map(function (v) { return v.kind; }), bets: SENT[0] && SENT[0].bets, text: pill().text() };
 """)
     assert answer["sent"] == ["fetch"]
-    assert len(answer["bets"]) >= 2
+    assert len(answer["bets"]) == 1                 # いま開いている券種だけ（最初のタブ）
     assert answer["text"] == "取り込み中… 0%"     # 押した直後（最初の進み具合が届くまで）
 
 
@@ -1493,7 +1493,7 @@ def test_the_phone_pill_is_short(script, tmp_path):
     """スマホは資料どおり丸い ↻ だけ（説明は title と aria-label に）。"""
     answer = _pill(script, tmp_path, layout="phone",
                    scenario="var answer = { text: pill().text(), label: pill().attrs['aria-label'] };")
-    assert answer == {"text": "↻", "label": "↻ 全券種を取り込む（約21秒）"}
+    assert answer == {"text": "↻", "label": "↻ この券種を更新"}
 
 
 @needs_jsc

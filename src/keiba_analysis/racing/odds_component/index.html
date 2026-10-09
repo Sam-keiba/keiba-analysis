@@ -499,7 +499,7 @@
   body.phone .mini.go { box-shadow: none; }
   /* 単勝・複勝の「選んだ馬を〜へ」の段は、スマホでは下のバーの左半分にまとめる */
   body.phone .acts-line { display: none; }
-  /* 見出し: 取得時刻の灰のピルと、右端の丸い ↻（全券種をまとめて取り込む） */
+  /* 見出し: 取得時刻の灰のピルと、右端の丸い ↻（いま開いている券種だけ取り込む） */
   .head-line { display: flex; align-items: center; gap: 10px; }
   .time-chip {
     font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px !important; background: #e8ecf0;
@@ -1467,7 +1467,7 @@
   }
 
   /**
-   * 見出しの右端の取り込みボタン（淡緑のピル。資料 2026-10 夕方版）。**全券種をまとめて**取り込む。
+   * 見出しの右端の取り込みボタン（淡緑のピル。資料 2026-10 夕方版）。**いま開いている券種だけ**を取り込み直す。
    *
    * 進捗は**実際の取り込み**に連動する。Python側が1券種ずつ取り込んで、そのたびに
    * `payload.progress = {done, total}` を付けて描き直すので、それで淡緑を左から濃くする。
@@ -1482,15 +1482,15 @@
     let label;
     if (running) label = "取り込み中… " + percent + "%";
     else if (progress && progress.finished) label = "✓ 取り込み済み " + progress.finished + "現在";
-    else label = "↻ 全券種を取り込む（約21秒）";
+    else label = "↻ この券種を更新";
     // スマホは資料どおり36pxの丸い ↻ だけ（取り込み中は％、済んだら ✓。下から淡緑が濃くなる）
     const icon = running ? percent + "%" : (progress && progress.finished ? "✓" : "↻");
     const button = el("button", {
       class: "import-pill" + (running ? " running" : "") + (phone ? " round" : ""), type: "button",
-      title: phone ? label : "全券種をまとめて取り込む（約21秒）", "aria-label": label,
+      title: phone ? label : "いま開いている券種だけを更新する", "aria-label": label,
     }, phone ? [el("span", { class: "ic", text: icon })] : [
       el("span", { class: "ic", text: icon === "↻" || icon === "✓" ? icon : "" }),
-      el("span", { text: icon === "↻" || icon === "✓" ? label.slice(1) : label }),   // 「 全券種を…」（頭の空白ごと）
+      el("span", { text: icon === "↻" || icon === "✓" ? label.slice(1) : label }),   // 「 この券種を…」（頭の空白ごと）
     ]);
     if (running) {
       button.style.background = phone
@@ -1503,7 +1503,7 @@
       importing = true;
       button.setAttribute("disabled", "disabled");
       button.textContent = phone ? "0%" : "取り込み中… 0%";
-      requestFetchMany((payload.tabs || []).map(function (t) { return t.key; }));
+      requestFetchMany([active]);
     });
     return button;
   }
@@ -1930,7 +1930,7 @@
     const b = bet(t.bets[0]);
     if (!b) { setHeight(); return; }
 
-    // 資料（PC・スマホとも）: 見出し＋取得時刻の灰のピル＋右端の丸い ↻（全券種をまとめて取り込む）
+    // 資料（PC・スマホとも）: 見出し＋取得時刻の灰のピル＋右端の丸い ↻（いま開いている券種だけ取り込む）
     panel.appendChild(el("div", { class: "head-line" },
       [el("strong", { text: t.label + "オッズ" }), phoneTimeChip(t), importButton()].filter(Boolean)));
 
@@ -1939,7 +1939,7 @@
         class: "empty-box",
         text: payload.readOnly
           ? t.label + "はまだ取り込んでいません（取り込みは手元のPCから行います）。"
-          : t.label + "はまだ取り込んでいません。見出しの右の ↻ を押すと、全券種をまとめて取り込めます（約21秒）。",
+          : t.label + "はまだ取り込んでいません。見出しの右の ↻ を押すと、この券種を取り込めます。",
       }));
       setHeight();
       return;
