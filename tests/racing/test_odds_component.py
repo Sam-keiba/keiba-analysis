@@ -853,13 +853,13 @@ answer.columnsAfter = NODES.panel.byClass("slot").length;
 
 @needs_jsc
 def test_popular_order_lists_every_combination_by_odds_and_adds_only_the_ticked(script, tmp_path):
-    """人気順: オッズの低い順に人気の番号つきで並ぶ。最初は何も選ばず、選んだ分だけが買い目に入る。"""
+    """人気順: オッズの低い順に「N人気」つきで並ぶ（単勝・複勝の表と同じ作り）。最初は何も選ばず、選んだ分だけが買い目に入る。"""
     answer = run_component(script, """
 render(PAYLOAD);
 NODES.tabs.children[2].click();                       // 馬連
-var table = NODES.panel.byClass("combos")[0];
+var table = NODES.panel.byClass("poprank")[0];
 function oddsCol() { return table.findAll(function (c) { return c.tagName === "tr"; })
-  .filter(function (r) { return r.byClass("odds").length; }).map(function (r) { return Number(r.byClass("odds")[0].text()); }); }
+  .filter(function (r) { return r.byClass("pr-odds").length; }).map(function (r) { return Number(r.byClass("pr-odds")[0].text()); }); }
 var ranks = table.byClass("rank").map(function (c) { return c.text(); });
 var odds = oddsCol();
 var start = NODES.panel.byClass("pick-count")[0].text();
@@ -870,7 +870,7 @@ var answer = { ranks: ranks.slice(0, 3), sorted: odds.every(function (v, i) { re
                start: start.slice(0, 5), one: one.slice(0, 5), kinds: NODES.slip.byClass("kind").map(function (k) { return k.text(); }),
                pts: NODES.slip.byClass("pts").map(function (p) { return p.text(); }) };
 """, tmp_path)
-    assert answer["ranks"] == ["1", "2", "3"]
+    assert answer["ranks"] == ["1人気", "2人気", "3人気"]
     assert answer["sorted"] is True
     assert answer["start"] == "選択 0/"
     assert answer["one"] == "選択 1/"

@@ -112,6 +112,19 @@
   .pop[data-rank="2"] { color: var(--pop2); font-weight: 700; }
   .pop[data-rank="3"] { color: var(--pop3); font-weight: 700; }
 
+  /* --- 人気順の表（単勝・複勝の表と同じ作り。人気・馬番＋馬名・オッズ） --- */
+  table.poprank td.pop { text-align: center; white-space: nowrap; width: 64px; }
+  table.poprank .pr-horses { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  table.poprank .pr-h { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  table.poprank .pr-h .nm { font-size: 15px; font-weight: 700; }
+  table.poprank td.pr-odds { text-align: right; white-space: nowrap; font: 700 16px 'Figtree', 'IBM Plex Sans JP', sans-serif; font-variant-numeric: tabular-nums; }
+  table.poprank td.pr-odds.miss { color: #b4bdc8; }
+  body.phone table.poprank td.pop { width: 50px; font-size: 11px; }
+  body.phone table.poprank .pr-horses { flex-direction: column; flex-wrap: nowrap; gap: 4px; }
+  body.phone table.poprank .pr-h .nm { font-size: 14px; }
+  body.phone table.poprank td.pr-odds { font-size: 15px; }
+  .more-rows { display: block; margin: 10px auto; }
+
   /* --- 単勝・複勝の一覧（1つの表に両方の列を並べる） --- */
   table.single { width: 100%; max-width: 760px; }
   table.single tbody tr { cursor: pointer; }          /* 行のどこを押してもチェックが入る */
@@ -1763,6 +1776,20 @@
     return cell;
   }
 
+  /** 人気順の表の「馬番・馬名」。組み合わせの馬ごとに、枠色の馬番と馬名を並べる（枠連は枠の色だけ）。 */
+  function rankedHorses(b, combo) {
+    const byNumber = {};
+    itemsOf(b).forEach(function (item) { byNumber[item.number] = item; });
+    const list = el("div", { class: "pr-horses" });
+    combo.split("-").forEach(function (text) {
+      const item = byNumber[Number(text)] || { number: Number(text), bg: "#e8ecf0", fg: "#6f7c8b" };
+      const parts = [numberChip(item)];
+      if (item.name) parts.push(el("span", { class: "nm", text: item.name }));
+      list.appendChild(el("span", { class: "pr-h" }, parts));
+    });
+    return el("td", { class: "name" }, [list]);
+  }
+
   /**
    * 組み合わせの一覧。行ごとに**選択**の四角が付く（買い目に入るのは選んだぶんだけ）。
    * 返す `sync()` は、画面の四角を中身に合わせ直す（全選択・全解除で使う）。
@@ -1812,9 +1839,18 @@
       boxes.push({ combo: combo, box: box });
       box.addEventListener("change", function () { picked.toggle(combo, box.checked); });
       const cells = [el("td", { class: "tick" }, [box])];
-      if (opts.ranked) cells.push(el("td", { class: "rank", text: String(rankOf[combo]) }));
-      cells.push(comboCells(b, combo));
-      cells.push(el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
+      if (opts.ranked) {
+        // 単勝・複勝の表と同じ作り: 人気（上位3つは色つき）・枠色の馬番＋馬名・オッズ（太字・右寄せ）
+        const rank = rankOf[combo];
+        cells.push(el("td", {
+          class: "pop rank", "data-rank": rank <= 3 ? String(rank) : null, text: rank + "人気",
+        }));
+        cells.push(rankedHorses(b, combo));
+        cells.push(el("td", { class: "pr-odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
+      } else {
+        cells.push(comboCells(b, combo));
+        cells.push(el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
+      }
       const row = el("tr", { title: "行を押すと選べます" }, cells);
       // 四角は小さいので、行のどこを押しても入る／外れるようにする
       row.addEventListener("click", function (event) {
@@ -1827,9 +1863,9 @@
     more.addEventListener("click", function () { addRows(); setHeight(); });
     addRows();
     const headCells = [el("th", { class: "tick", text: "選択" })];
-    if (opts.ranked) headCells.push(el("th", { text: "人気" }));
-    headCells.push(el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }));
-    const table = el("table", { class: "combos" }, [el("thead", {}, [el("tr", {}, headCells)]), body]);
+    if (opts.ranked) headCells.push(el("th", { text: "人気" }), el("th", { text: "馬番・馬名" }), el("th", { text: "オッズ" }));
+    else headCells.push(el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }));
+    const table = el("table", { class: opts.ranked ? "single poprank" : "combos" }, [el("thead", {}, [el("tr", {}, headCells)]), body]);
     return {
       node: el("div", { class: "scroll" }, [table, more]),
       sync: function () {
