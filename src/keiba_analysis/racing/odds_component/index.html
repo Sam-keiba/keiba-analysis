@@ -401,7 +401,6 @@
   }
   .slip-empty { padding: 16px 18px; font-size: 12px; line-height: 1.8; color: #535f6d; }
   .g { padding: 12px 18px 12px 14px; border-bottom: 1px solid var(--line); }
-  .g:has(.g-head input:checked) { background: var(--selected); }
   .g-head .bet { padding: 2px 10px; font-weight: 700; border-radius: 999px; }
   .g-head .pts { color: var(--accent-700); }
   .g-head .split { border: 1px solid #b4bdc8; border-radius: 6px; background: #fbfbfc; color: var(--ink); }
@@ -703,7 +702,6 @@
   const dropped = {};                // 券種 -> {組み合わせ: true}（選択から外したもの）
   const lastCombos = {};             // 券種 -> 直前の組み合わせ（変わったら選択を戻す）
   const sorts = {};                  // 券種 -> "odds" | "combo"
-  const checked = {};                // 買い目のまとまり -> チェックしたか
 
   /**
    * Streamlitへ値を返す**唯一の口**。
@@ -1225,7 +1223,6 @@
       };
     });
     slip.splice.apply(slip, [at, 1].concat(parts));
-    delete checked[group.group];
     slip = sortSlip(slip, betOrder());     // 並べ替えは安定なので、もとの場所に並ぶ
     drawSlip();
     saveSlip();
@@ -1239,21 +1236,15 @@
     slip.forEach(function (group) {
       const b = bet(group.bet);
       const kind = group.kind || (b && b.legs === 1 ? "通常" : "フォーメーション");
-      const tick = el("input", { type: "checkbox" });
-      tick.checked = !!checked[group.group];
-      tick.addEventListener("change", function () { checked[group.group] = tick.checked; });
-
       const drop = el("button", { class: "x", type: "button", text: "✕", title: "この買い目を消す" });
       drop.addEventListener("click", function () {
         slip = slip.filter(function (other) { return other !== group; });
-        delete checked[group.group];
         drawSlip();
         saveSlip();
       });
 
       // 券種のピルと左の帯は、資料どおり券種によらずアクセントの緑
       const head = el("div", { class: "g-head" }, [
-        tick,
         el("span", { class: "bet", text: b ? b.label : group.bet }),
         el("span", { class: "kind", text: kind }),
         el("span", { class: "pts", text: group.combos.length + "点" }),
