@@ -141,14 +141,14 @@ var answer = {
 
 
 @needs_jsc
-def test_the_d_tier_is_greyed_and_a_hand_placed_horse_has_a_green_border(script, tmp_path):
+def test_the_d_tier_is_name_muted_but_number_keeps_colour_and_a_hand_placed_horse_has_a_green_border(script, tmp_path):
     payload = _payload()
     payload["markers"][0]["is_manual"] = True
     answer = run_board(script, """
 render(PAYLOAD);
 var answer = { d: cls(chipOf("シュガークン")), manual: cls(chipOf("キャントウェイト")), plain: cls(chipOf("ロブチェン")) };
 """, tmp_path, payload)
-    assert "dim" in answer["d"]
+    assert "tier-d" in answer["d"] and "dim" not in answer["d"]   # 馬番の色は残す
     assert "manual" in answer["manual"] and "manual" not in answer["plain"]
 
 
