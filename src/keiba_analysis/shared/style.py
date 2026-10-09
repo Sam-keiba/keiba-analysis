@@ -610,7 +610,9 @@ table.best-times td.bt-finish {{ text-align: right; }}
 
 /* --- 開催の勝ちタイム（持ちタイムと同じ表。列の幅だけここで決める）--------------------- */
 /* 14列あるので、右の列に収まらないときは表の中を横にスクロールさせる */
-table.mt-table {{ min-width: 760px; }}
+table.mt-table {{ min-width: 620px; }}
+.mt-hardness {{ margin: 0 0 6px; font-size: 13px; color: #5a615a; }}
+.mt-hardness b {{ color: inherit; font-variant-numeric: tabular-nums; }}
 table.mt-table .mt-no {{ width: 30px; text-align: right; color: #6b716b; }}
 table.mt-table .mt-waku {{ width: 30px; text-align: center; }}
 table.mt-table .mt-horse {{ width: 110px; }}

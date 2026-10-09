@@ -178,9 +178,9 @@ def test_every_column_has_a_heading():
     html = meeting.render_meeting([row()])
     head = html.split("<thead>")[1].split("</thead>")[0]
     body = html.split("<tbody>")[1].split("</tr>")[0]
-    assert head.count("<th") == body.count("<td") == 14
-    for label in ("R", "馬番", "馬名", "タイム", "上り", "前後3F", "ペース", "脚質", "馬場", "ク"):
-        assert f">{label}</th>" in head
+    assert head.count("<th") == body.count("<td") == 11
+    labels = ["R", "クラス", "距離", "馬場", "タイム", "前後3F", "ペース", "馬番", "脚質", "上がり", "映像"]
+    assert [h.split(">")[-1] for h in head.split("</th>")[:-1]] == labels
 
 
 def test_the_winner_last_3f_and_the_pace_are_shown():
@@ -198,25 +198,27 @@ def test_the_winner_last_3f_is_a_dash_without_results():
     assert html.split("<td class='mt-num'>")[1].split("</td>")[0] == "—"
 
 
-def test_the_hardness_is_a_column_like_the_best_times():
+def test_the_hardness_is_a_note_above_the_table_not_a_column():
+    """クッション値は1日変わらないので、列にせず表の上に1行で出す。"""
     html = meeting.render_meeting([row(cushion_value=8.6)])
-    assert html.split("<td class='mt-hard'>")[1].split("</td>")[0] == "8.6"
+    assert "mt-hard'" not in html
+    assert html.startswith("<div class='mt-hardness'>クッション値 <b>8.6</b></div>")
     dirt = meeting.render_meeting([row(surface="dirt", cushion_value=None, dirt_moisture_goal=7.7)])
-    assert ">含水</th>" in dirt and "<td class='mt-hard'>7.7</td>" in dirt
+    assert "含水率 <b>7.7%</b>" in dirt
+    assert "mt-hardness" not in meeting.render_meeting([row(cushion_value=None)])
 
 
 def test_the_winner_number_and_name_are_shown():
-    """持ちタイムと同じく、馬番（枠の色）と馬名を出す。開催の表では勝ち馬。"""
+    """馬番（枠の色）を出す。開催の表では勝ち馬。馬名の列は無い。"""
     html = meeting.render_meeting([row(winner_umaban=7, winner_waku=4, winner_name="ジョスラン")])
     cell = html.split("<td class='mt-waku'>")[1].split("</td>")[0]
     assert ">7</span>" in cell and "background:" in cell
-    assert "ジョスラン" in html.split("<td class='mt-horse'>")[1].split("</td>")[0]
+    assert "mt-horse" not in html
 
 
 def test_the_winner_is_a_dash_without_results():
     html = meeting.render_meeting([row()])
     assert html.split("<td class='mt-waku'>")[1].split("</td>")[0] == "—"
-    assert html.split("<td class='mt-horse'>")[1].split("</td>")[0] == "<div>—</div>"
 
 
 # --- スマホのカード型 ---------------------------------------------------------------

@@ -83,10 +83,9 @@ def _style_cell(row: dict) -> str:
 def _columns(surface: str | None) -> list[tuple[str, str]]:
     """表の列（td のクラス, 見出し）。持ちタイムの表と同じ見た目・同じ並びの考え方にそろえる。"""
     return [
-        ("mt-no", "R"), ("mt-course", "距離"), ("mt-class", "クラス"), ("mt-name", "レース名"),
-        ("mt-waku", "馬番"), ("mt-horse", "馬名"), ("mt-time", "タイム"), ("mt-num", "上り"), ("mt-split", "前後3F"), ("mt-pace", "ペース"),
-        ("mt-style", "脚質"), ("mt-going", "馬場"), ("mt-hard", hardness_head(surface)),
-        ("mt-detail", "映像"),
+        ("mt-no", "R"), ("mt-class", "クラス"), ("mt-course", "距離"), ("mt-going", "馬場"),
+        ("mt-time", "タイム"), ("mt-split", "前後3F"), ("mt-pace", "ペース"), ("mt-waku", "馬番"),
+        ("mt-style", "脚質"), ("mt-num", "上がり"), ("mt-detail", "映像"),
     ]
 
 
@@ -111,20 +110,32 @@ def _winner_last_3f(row: dict) -> str:
     return DASH if value is None else f"{float(value):.1f}"
 
 
+def _hardness_note(rows: list[dict]) -> str:
+    """表の上に出す、その日のクッション値（ダートは含水率）。1日のうちは変わらないので列にはしない。"""
+    name = "含水率" if rows[0].get("surface") == "dirt" else "クッション値"
+    for row in rows:
+        text = hardness_text(row)
+        if text != DASH:
+            unit = "%" if name == "含水率" else ""
+            return f"<div class='mt-hardness'>{name} <b>{escape(text)}{unit}</b></div>"
+    return ""
+
+
 def render_meeting(rows: list[dict]) -> str:
     """開催の勝ちタイムの表（**持ちタイムの表と同じ見た目**: 見出し行に列名、薄い灰の見出し）。
 
-    列は R・距離・クラス・レース名・馬番と馬名（勝ち馬）・タイム・上り（勝ち馬）・前後3F・ペース・
-    脚質（勝ち馬）・馬場・馬場の硬さ・映像。馬ごとの結果がまだ無いレース（JRAのラップだけ）は、
-    勝ち馬の馬番・馬名・上りが「—」になる。日ごとにタブで分けて渡される前提なので日の区切りの行は置かず、
-    クッション値（含水率）は持ちタイムと同じく列に出す。
+    列は R・クラス・距離・馬場・タイム・前後3F・ペース・馬番（勝ち馬）・脚質（勝ち馬）・上がり（勝ち馬）・映像。
+    レース名はマウスを乗せると出す。馬ごとの結果がまだ無いレース（JRAのラップだけ）は、
+    勝ち馬の馬番・脚質・上がりが「—」になる。日ごとにタブで分けて渡される前提なので日の区切りの行は置かず、
+    その日は変わらないクッション値（含水率）は、表の上に1行で出す。
     """
     if not rows:
         return ""
     columns = _columns(rows[0].get("surface"))
+    note = _hardness_note(rows)
     head = "".join(f"<th class='{cls}'>{escape(label)}</th>" for cls, label in columns)
     lines = [
-        "<div class='best-times-wrap meeting-wrap'><table class='best-times mt-table'>"
+        f"{note}<div class='best-times-wrap meeting-wrap'><table class='best-times mt-table'>"
         f"<thead><tr>{head}</tr></thead><tbody>"
     ]
     for row in rows:
@@ -134,19 +145,16 @@ def render_meeting(rows: list[dict]) -> str:
         lines.append(
             f"<tr title='{name}'>"
             f"<td class='mt-no'>{row.get('race_no') or DASH}R</td>"
-            # 資料どおり距離は「1400m」。内回り・外回りはマウスを乗せると出す
-            f"<td class='mt-course' title='{escape(course_label(row))}'>{escape(_distance_text(row))}</td>"
             f"<td class='mt-class'>{escape(class_short(row))}</td>"
-            f"<td class='mt-name'><div>{name}</div></td>"
-            f"<td class='mt-waku'>{_winner_badge(row)}</td>"
-            f"<td class='mt-horse'><div>{escape(row.get('winner_name') or DASH)}</div></td>"
+            # 距離は「1400m」。内回り・外回りはマウスを乗せると出す
+            f"<td class='mt-course' title='{escape(course_label(row))}'>{escape(_distance_text(row))}</td>"
+            f"<td class='mt-going'>{escape(row.get('going') or DASH)}</td>"
             f"<td class='mt-time'>{escape(format_race_time(row.get('time_sec')))}</td>"
-            f"<td class='mt-num'>{escape(_winner_last_3f(row))}</td>"
             f"<td class='mt-split'>{escape(split_label(row))}</td>"
             f"<td class='mt-pace'>{pace or DASH}</td>"
+            f"<td class='mt-waku'>{_winner_badge(row)}</td>"
             f"<td class='mt-style'>{_style_cell(row)}</td>"
-            f"<td class='mt-going'>{escape(row.get('going') or DASH)}</td>"
-            f"<td class='mt-hard'>{escape(hardness_text(row))}</td>"
+            f"<td class='mt-num'>{escape(_winner_last_3f(row))}</td>"
             # いちばん右にJRA公式のレース結果ページ（レース映像）へのリンク
             f"<td class='mt-detail'>{jra_race_link(row, 'mt-link')}</td></tr>"
         )
