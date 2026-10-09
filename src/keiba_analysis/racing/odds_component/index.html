@@ -116,10 +116,11 @@
   .scroll.pop-scroll { max-width: none; max-height: none; overflow: visible; border: none; background: transparent; box-shadow: none; }
   table.poprank { width: 100%; }
   table.poprank td.pop { text-align: center; white-space: nowrap; }
-  table.poprank td.pr-h { text-align: left; white-space: nowrap; }
+  table.poprank td, table.poprank th { text-align: center; }        /* 表の中はすべて中央揃え */
+  table.poprank td.pr-h { text-align: center; white-space: nowrap; }
   table.poprank .pr-in { display: inline-flex; align-items: center; gap: 10px; }
   table.poprank .pr-in .nm { font-size: 15px; font-weight: 700; }
-  table.poprank td.pr-odds { text-align: right; white-space: nowrap; font: 700 17px 'Figtree', 'IBM Plex Sans JP', sans-serif; font-variant-numeric: tabular-nums; }
+  table.poprank td.pr-odds { text-align: center; white-space: nowrap; font: 700 17px 'Figtree', 'IBM Plex Sans JP', sans-serif; font-variant-numeric: tabular-nums; }
   table.poprank td.pr-odds.miss { color: #b4bdc8; }
   body.phone table.poprank td.pop { font-size: 11px; }
   body.phone table.poprank .pr-in { gap: 6px; }
