@@ -81,9 +81,10 @@
   }
   .chip .name { min-width: 0; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
   .chip.manual { border: 2px solid var(--accent-300); }
-  /* D段（＝消し）にいる馬と、前の盤で消した馬は、半透明＋グレースケール */
+  /* 前の盤で消した馬は、半透明＋グレースケール。D段の馬は、馬名だけ薄くして馬番の色は残す */
   .chip.dim { opacity: .5; filter: grayscale(1); }
-  .chip.dim .name { color: var(--muted); }
+  .chip.dim .name, .chip.tier-d .name { color: var(--muted); }
+  .chip.tier-d .name { opacity: .6; }
   .chip.lifted { opacity: .3; }
   .chip.flash { outline: 3px solid var(--accent); outline-offset: 2px; }
   .ghost {
@@ -260,7 +261,8 @@
   function applyLook(marker) {
     if (!marker.el) return;
     marker.el.classList.toggle("manual", !!marker.is_manual && marker.tier !== "D");
-    marker.el.classList.toggle("dim", marker.tier === "D" || !!marker.is_excluded);
+    marker.el.classList.toggle("dim", !!marker.is_excluded);
+    marker.el.classList.toggle("tier-d", marker.tier === "D" && !marker.is_excluded);
   }
 
   // --- ドラッグ ------------------------------------------------------------------
