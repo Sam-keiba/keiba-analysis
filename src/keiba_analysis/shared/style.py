@@ -630,7 +630,7 @@ table.mt-table .mt-style {{ width: 34px; text-align: center; }}
 table.mt-table .mt-going {{ width: 34px; text-align: center; color: #5a615a; }}
 table.mt-table .mt-hard {{ width: 40px; color: #5a615a; font-variant-numeric: tabular-nums; }}
 table.mt-table .mt-detail {{ width: 30px; text-align: center; }}
-table.mt-table th {{ text-align: center !important; }}
+table.mt-table th, table.mt-table td {{ text-align: center !important; }}
 
 /* --- 馬柱／オッズ のタブ（レース画面のいちばん下） ---------------------------------
    **セレクタはStreamlitが実際に出す印に合わせる。** 1.64は `data-testid="stTab"` /
