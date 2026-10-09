@@ -603,19 +603,19 @@
   body.phone table.single td.odds:nth-last-child(2) { font: 700 16px 'Figtree', sans-serif; }
   body.phone table.single td.odds:last-child { font: 400 11px 'Figtree', 'IBM Plex Sans JP', sans-serif; white-space: nowrap; }
 
-  /* スマホの下のバー: 下から84px・幅は456pxまで（資料）。追加先の「単勝へ／複勝へ」は白い44pxのピル2つ */
+  /* スマホの下のバー: 部品の枠の下端から8px（画面の下から84pxは、枠を縮める reservePx 側で空ける。二重に上げない）・幅は456pxまで（資料）。追加先の「単勝へ／複勝へ」は白い44pxのピル2つ */
   body.phone #phone-bar {
-    left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); max-width: 456px; bottom: 84px;
+    left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); max-width: 456px; bottom: 8px;
   }
   body.phone #phone-bar-choice {
-    left: 50%; transform: translateX(-50%); width: calc(100% - 24px); max-width: 456px; bottom: 152px;
+    left: 50%; transform: translateX(-50%); width: calc(100% - 24px); max-width: 456px; bottom: 76px;
     padding: 0; background: transparent; box-shadow: none; border-radius: 0 !important;
   }
   body.phone #phone-bar-choice button {
     flex: 1; height: 44px; background: #fff; color: #535f6d; font-size: 15px;
     box-shadow: 0 6px 20px rgba(0,0,0,.3);
   }
-  body.phone { padding-bottom: 170px; }
+  body.phone { padding-bottom: 90px; }
 
   /* スマホの買い目シート（資料: 見出し56px・淡い灰・下に2pxの線・✕） */
   body.phone .slip { background: #eceef1; }
