@@ -605,6 +605,8 @@ table.best-times .bt-venue {{ width: 40px; color: #5a615a; }}
 table.best-times .bt-going {{ width: 36px; color: #5a615a; }}
 table.best-times td.bt-venue, table.best-times td.bt-going {{ text-align: center; }}
 table.best-times .bt-hard {{ width: 44px; color: #5a615a; font-variant-numeric: tabular-nums; }}
+/* 表の中身はすべて中央ぞろえ（開催の勝ちタイムと同じ） */
+table.best-times th, table.best-times td {{ text-align: center !important; }}
 table.best-times .bt-finish {{ width: 34px; }}
 table.best-times td.bt-finish {{ text-align: right; }}
 
