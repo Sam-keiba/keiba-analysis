@@ -123,8 +123,10 @@
   .acts-line { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
 
   /* --- 買い方（通常／フォーメーション・ながし・ボックス） --- */
-  .modes { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
-  .modes .mini { font-size: 13px; padding: 6px 14px; }
+  .modes { display: flex; gap: 6px; flex-wrap: nowrap; margin: 0 0 10px; }
+  .modes .mini { font-size: 13px; padding: 6px 14px; white-space: nowrap; }
+  body.phone .modes { gap: 5px; }
+  body.phone .modes .mini { padding: 6px 10px; flex: 0 1 auto; }
   .modes .mini[aria-pressed="true"] {
     background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700;
   }
@@ -674,9 +676,9 @@
   // 買い方（既定は人気順）。人気順は馬を選ばず、オッズの低い順に並んだ全組み合わせから選ぶ
   const MODES = [
     ["popular", "人気順"],
-    ["formation", "通常／フォーメーション"],
+    ["formation", "フォーメーション"],
     ["nagashi", "ながし"],
-    ["box", "ボックス"],
+    ["box", "BOX"],
   ];
   const MODE_LABELS = { popular: "人気順", formation: "フォーメーション", nagashi: "ながし", box: "ボックス" };
 
