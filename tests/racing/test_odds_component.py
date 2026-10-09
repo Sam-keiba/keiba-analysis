@@ -1307,18 +1307,17 @@ NODES.panel.byClass("tick")[3].children[0].click();
 press(NODES.panel, "選んだ馬を単勝へ");
 
 var button = NODES.slip.find(function (c) {
-  return c.tagName === "button" && c.text().indexOf("買い目の券種を更新") === 0; });
+  return c.tagName === "button" && c.attrs["aria-label"] === "買い目の券種を更新"; });
 var label = button.text();
 button.click();
 var sent = SENT[SENT.length - 1];
 var answer = { label: label, kind: sent.kind, bets: sent.bets,
                after: button.text(), disabled: !!button.attrs["disabled"] };
 """, tmp_path)
-    # 単勝と馬連の2券種＝2リクエスト（3秒間隔）
-    assert answer["label"] == "買い目の券種を更新（2券種・約6秒）"
+    assert answer["label"] == "↻"                      # 文字は出さず、更新マークだけ
     assert answer["kind"] == "fetch"
     assert answer["bets"] == ["tansho", "umaren"]      # タブの並び順
-    assert answer["after"] == "取り込み中…" and answer["disabled"] is True
+    assert answer["after"] == "↻" and answer["disabled"] is True
 
 
 @needs_jsc
@@ -1330,7 +1329,7 @@ NODES.panel.byClass("tick")[0].children[0].click();
 press(NODES.panel, "選んだ馬を単勝へ");
 press(NODES.panel, "選んだ馬を複勝へ");
 var button = NODES.slip.find(function (c) {
-  return c.tagName === "button" && c.text().indexOf("買い目の券種を更新") === 0; });
+  return c.tagName === "button" && c.attrs["aria-label"] === "買い目の券種を更新"; });
 button.click();
 var answer = { bets: SENT[SENT.length - 1].bets,
                groups: NODES.slip.byClass("bet").map(function (b) { return b.text(); }) };
@@ -1344,7 +1343,7 @@ def test_there_is_nothing_to_refresh_without_a_slip(script, tmp_path):
     """買い目が空のときも、ボタンは出すが押せない（資料どおり常に出す）。"""
     answer = run_component(script, OPEN + """
 var found = NODES.slip.findAll(function (c) {
-  return c.tagName === "button" && c.text().indexOf("買い目の券種を更新") === 0; });
+  return c.tagName === "button" && c.attrs["aria-label"] === "買い目の券種を更新"; });
 var answer = { buttons: found.length, disabled: found[0] && found[0].attrs.disabled === "disabled" };
 """, tmp_path)
     assert answer == {"buttons": 1, "disabled": True}
@@ -1523,3 +1522,17 @@ def test_the_amount_is_rounded_to_100_yen(value, expected, script, tmp_path):
     """馬券は100円単位。金額は100の倍数にそろえ、最小は100円。"""
     out = run_js(f"print(roundAmount({json.dumps(value)}));", script, tmp_path, "roundAmount")
     assert int(out) == expected
+
+
+@needs_jsc
+def test_the_slip_header_has_the_refresh_mark_and_no_bulk_buttons(script, tmp_path):
+    """買い目の見出しは「買い目」＋更新マークだけ。「自動で保存されます」と一括ボタンは出さない。"""
+    answer = run_component(script, OPEN + """
+var texts = NODES.slip.findAll(function (c) { return c.tagName === "button" || c.tagName === "span"; })
+  .map(function (c) { return c.text(); }).join("|");
+var h3 = NODES.slip.find(function (c) { return c.tagName === "h3"; });
+var answer = { texts: texts, header: h3.text() };
+""", tmp_path)
+    for gone in ("自動で保存されます", "すべて選択", "すべて解除", "選んだ買い目を削除"):
+        assert gone not in answer["texts"]
+    assert answer["header"].startswith("買い目↻")

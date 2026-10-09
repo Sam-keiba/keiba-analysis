@@ -233,7 +233,8 @@
     border-bottom: 1px solid var(--line);
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
   }
-  .slip-box > h3 .saved { font-size: 11px; font-weight: 400; color: var(--muted); }
+  .slip-box > h3 .ttl { display: flex; align-items: center; gap: 10px; }
+  .slip-box > h3 .slip-refresh { margin-left: 0; }
   .slip-list { max-height: 640px; overflow-y: auto; }
   .slip-empty { padding: 16px 12px; color: var(--muted); font-size: 13px; line-height: 1.7; }
   /* まとまりごとに券種の色。左の帯とバッジで、どの券種かをひと目で見分ける
@@ -275,11 +276,6 @@
   }
   .g-head .split:hover { color: var(--accent); border-color: var(--accent); }
   .slip-foot { padding: 10px 12px; background: var(--zebra); border-top: 1px solid var(--line); }
-  .slip-foot .refresh-all {
-    display: block; width: 100%; margin-bottom: 9px; padding: 7px 10px;
-    font-size: 12px; font-weight: 700; color: var(--accent); border-color: var(--accent);
-  }
-  .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); color: #fff; }
   .slip-foot .bulk { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
   .slip-total { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
   .slip-total .yen { margin-left: auto; font-size: 20px; font-weight: 700; color: var(--accent); }
@@ -403,7 +399,6 @@
     background: #e8ecf0; border-bottom: none;
     font: 700 18px 'Figtree', 'IBM Plex Sans JP', sans-serif; padding: 12px 18px;
   }
-  .slip-box > h3 .saved { font: 400 11px 'Figtree', 'IBM Plex Sans JP', sans-serif; }
   .slip-empty { padding: 16px 18px; font-size: 12px; line-height: 1.8; color: #535f6d; }
   .g { padding: 12px 18px 12px 14px; border-bottom: 1px solid var(--line); }
   .g:has(.g-head input:checked) { background: var(--selected); }
@@ -420,10 +415,6 @@
   .g-money .sub { font-size: 15px; font-weight: 700; }
   .g-payout { color: var(--accent-700); font-size: 11px; margin-top: 6px; }
   .slip-foot { background: transparent; padding: 14px 18px; border-top: 1px solid var(--line); }
-  .slip-foot .refresh-all {
-    border: 1px solid #b4bdc8; border-radius: 6px; color: var(--ink); background: #fbfbfc; padding: 8px 14px;
-  }
-  .slip-foot .refresh-all:hover:not([disabled]) { background: var(--accent); color: #fff; }
   .slip-total { align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
   .slip-total span:first-child { font-size: 14px; font-weight: 700; }
   .slip-total .yen { font: 700 28px 'Figtree', 'IBM Plex Sans JP', sans-serif; color: var(--accent-700); }
@@ -552,7 +543,7 @@
   body.phone .slip-box > h3 { background: transparent; border-bottom: 1px solid var(--line); }
   body.phone .g-money input { border-radius: 4px !important; border-width: 1px; }
   body.phone .g-head .bet { border-radius: 999px !important; }
-  body.phone .g-head .split, body.phone .sheet-close, body.phone .slip-foot .refresh-all {
+  body.phone .g-head .split, body.phone .sheet-close {
     border-radius: 999px !important;
   }
   /* PC: 表の下の「選んだ馬を〜へ」の段は出さず、買い目パネルの下の「買い目へ追加(N)」にまとめる（資料） */
@@ -585,8 +576,7 @@
   }
   .g-combos .c-horse b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .slip-box > h3 { background: #f4f6f8; border-bottom: 1px solid #d5dbe2; }
-  .slip-foot .mini, .slip-foot .refresh-all { border-radius: 6px !important; }
-  .slip-foot .refresh-all[disabled] { opacity: .5; }
+  .slip-foot .mini { border-radius: 6px !important; }
   .slip-total .yen { font-size: 30px; }
 
   /* --- スマホの単勝・複勝の表（資料: 黒い見出し・行の下線だけ・人気は馬名の下） --- */
@@ -626,7 +616,6 @@
     height: 56px; box-sizing: border-box; padding: 0 12px; background: #f4f6f8; border-bottom: 1px solid #d5dbe2;
     justify-content: flex-start; font-size: 20px;
   }
-  body.phone .slip-box > h3 .saved { margin-left: 6px; color: #6f7c8b; }
   body.phone .sheet-close {
     margin-left: auto; width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center;
     background: transparent; font-size: 20px; font-weight: 400;
@@ -642,7 +631,6 @@
   }
   body.phone .g-money .sub { font-size: 16px; }
   body.phone .slip-foot { padding: 14px 12px; }
-  body.phone .slip-foot .refresh-all { width: 100%; height: 48px; }
   body.phone .slip-foot .mini {
     height: 44px; border-radius: 6px !important; background: #fbfbfc !important; color: var(--ink) !important;
     box-shadow: none;
@@ -1352,49 +1340,28 @@
       add.addEventListener("click", function () { onSlipAdd(addChoice); });
       bulk.appendChild(add);
     }
-    [["すべて選択", true], ["すべて解除", false]].forEach(function (pair) {
-      const button = el("button", { class: "mini", type: "button", text: pair[0] });
-      button.addEventListener("click", function () {
-        slip.forEach(function (group) { checked[group.group] = pair[1]; });
-        drawSlip();
-      });
-      bulk.appendChild(button);
-    });
-    const drop = el("button", { class: "mini", type: "button", text: "選んだ買い目を削除" });
-    drop.addEventListener("click", function () {
-      const before = slip.length;
-      slip = slip.filter(function (group) { return !checked[group.group]; });
-      if (slip.length === before) return;
-      Object.keys(checked).forEach(function (key) { delete checked[key]; });
-      drawSlip();
-      saveSlip();
-    });
-    bulk.appendChild(drop);
 
     const totals = el("div", { class: "slip-total", id: "slip-total" });
     const foot = el("div", { class: "slip-foot" }, []);
 
-    // 買い目に入れた券種だけ、まとめて取り込み直す（1券種＝1リクエスト・3秒間隔）
-    // ボタンは常に出す（資料どおり）。買い目が空のうちは押せない
+    // 買い目に入れた券種だけ、まとめて取り込み直す（1券種＝1リクエスト・3秒間隔）。
+    // 丸い更新マークだけを、見出しの「買い目」の隣に置く。買い目が空のうちは押せない
     const wanted = payload.readOnly ? [] : slipTabKeys();
+    let refresh = null;
     if (!payload.readOnly) {
-      const refresh = el("button", {
-        class: "mini refresh-all", type: "button",
-        text: wanted.length
-          ? "買い目の券種を更新（" + wanted.length + "券種・約" + wanted.length * 3 + "秒）"
-          : "買い目の券種を更新",
+      refresh = el("button", {
+        class: "import-pill round slip-refresh", type: "button",
         title: "買い目に入っている券種のオッズを、JRA公式から取り込み直す",
-      });
+        "aria-label": "買い目の券種を更新",
+      }, [el("span", { class: "ic", text: "↻" })]);
       if (!wanted.length) refresh.setAttribute("disabled", "disabled");
       refresh.addEventListener("click", function () {
         if (!wanted.length) return;
         refresh.setAttribute("disabled", "disabled");
-        refresh.textContent = "取り込み中…";
         requestFetchMany(wanted);
       });
-      foot.appendChild(refresh);
     }
-    foot.appendChild(bulk);
+    if (!phone) foot.appendChild(bulk);          // 中身はPCの「買い目へ追加(N)」だけ
     if (!phone) foot.appendChild(addChoice);
     foot.appendChild(totals);
 
@@ -1403,8 +1370,7 @@
     close.addEventListener("click", function () { bodyClass("sheet-open", false); });
     box.appendChild(el("div", { class: "slip-box" }, [
       el("h3", {}, [
-        el("span", { text: "買い目" }),
-        el("span", { class: "saved", text: "自動で保存されます" }),
+        el("span", { class: "ttl" }, [el("span", { text: "買い目" }), refresh].filter(Boolean)),
         close,
       ]),
       list, foot,
