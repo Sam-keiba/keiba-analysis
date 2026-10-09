@@ -671,13 +671,14 @@
     const unit = 100;
     return Math.max(unit, Math.round((Number(value) || 0) / unit) * unit);
   }
-  // 買い方（既定は今までどおりフォーメーション）
+  // 買い方（既定は人気順）。人気順は馬を選ばず、オッズの低い順に並んだ全組み合わせから選ぶ
   const MODES = [
+    ["popular", "人気順"],
     ["formation", "通常／フォーメーション"],
     ["nagashi", "ながし"],
     ["box", "ボックス"],
   ];
-  const MODE_LABELS = { formation: "フォーメーション", nagashi: "ながし", box: "ボックス" };
+  const MODE_LABELS = { popular: "人気順", formation: "フォーメーション", nagashi: "ながし", box: "ボックス" };
 
   let payload = { betTypes: [], tabs: [], horses: [], frames: [], slip: [], readOnly: false };
   let active = null;                 // 表示中のタブ（券種）
@@ -696,10 +697,11 @@
   const singlePicks = {};            // 単勝・複勝の表で選んだ馬番
   // 組み合わせの券種（馬連など）のパネルが、スマホの下のバーに知らせる「選んだ点数」と「追加する動き」
   let phoneCombo = null;
-  let mode = "formation";            // 買い方（画面を開いているあいだ覚える）
+  let mode = "popular";              // 買い方（画面を開いているあいだ覚える。最初は人気順）
   const nagashi = {};                // 券種 -> {axes, partners, unit, positions, multi}
   const boxPicks = {};               // 券種 -> {番号: true}（ボックスで選んだ馬）
   const dropped = {};                // 券種 -> {組み合わせ: true}（選択から外したもの）
+  const popPicked = {};              // 券種 -> {組み合わせ: true}（人気順で選んだもの。最初は何も選ばない）
   const lastCombos = {};             // 券種 -> 直前の組み合わせ（変わったら選択を戻す）
   const sorts = {};                  // 券種 -> "odds" | "combo"
 
@@ -1130,6 +1132,10 @@
    * 外したものだけを覚えているので、出たばかりの組み合わせは全部選ばれている。
    */
   function pickedCombos(key, combos) {
+    if (mode === "popular") {            // 人気順は、選んだものだけが入る（全部選ぶと数千点になるため）
+      const on = popPicked[key] || {};
+      return combos.filter(function (combo) { return on[combo]; });
+    }
     const off = dropped[key] || {};
     return combos.filter(function (combo) { return !off[combo]; });
   }
@@ -1759,14 +1765,15 @@
    * 組み合わせの一覧。行ごとに**選択**の四角が付く（買い目に入るのは選んだぶんだけ）。
    * 返す `sync()` は、画面の四角を中身に合わせ直す（全選択・全解除で使う）。
    */
-  function drawCombos(b, combos, picked) {
+  function drawCombos(b, combos, picked, opts) {
+    opts = opts || {};
     if (!combos.length) {
       return {
         node: el("div", { class: "empty-box", text: "上の列から馬を選ぶと、組み合わせとオッズが出ます。" }),
         sync: function () {},
       };
     }
-    const order = sorts[b.key] || "odds";
+    const order = opts.ranked ? "odds" : (sorts[b.key] || "odds");
     const sorted = combos.slice();
     if (order === "odds") {
       sorted.sort(function (x, y) {
@@ -1785,17 +1792,28 @@
     }
     const body = el("tbody", {});
     const boxes = [];
-    sorted.forEach(function (combo) {
+    const rankOf = {};
+    if (opts.ranked) sorted.forEach(function (combo, i) { rankOf[combo] = i + 1; });
+    let shown = 0;
+    const more = el("button", { class: "mini more-rows", type: "button" });
+    function addRows() {
+      const end = opts.limit ? Math.min(sorted.length, shown + opts.limit) : sorted.length;
+      sorted.slice(shown, end).forEach(addRow);
+      shown = end;
+      if (shown >= sorted.length) more.style.display = "none";
+      else more.textContent = "さらに" + Math.min(opts.limit, sorted.length - shown) + "点を表示（残り" + (sorted.length - shown) + "点）";
+    }
+    function addRow(combo) {
       const low = oddsLow(b, combo);
       const box = el("input", { type: "checkbox" });
       box.checked = picked.isOn(combo);
       boxes.push({ combo: combo, box: box });
       box.addEventListener("change", function () { picked.toggle(combo, box.checked); });
-      const row = el("tr", { title: "行を押すと選べます" }, [
-        el("td", { class: "tick" }, [box]),
-        comboCells(b, combo),
-        el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }),
-      ]);
+      const cells = [el("td", { class: "tick" }, [box])];
+      if (opts.ranked) cells.push(el("td", { class: "rank", text: String(rankOf[combo]) }));
+      cells.push(comboCells(b, combo));
+      cells.push(el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }));
+      const row = el("tr", { title: "行を押すと選べます" }, cells);
       // 四角は小さいので、行のどこを押しても入る／外れるようにする
       row.addEventListener("click", function (event) {
         if (event.target === box) return;
@@ -1803,16 +1821,15 @@
         picked.toggle(combo, box.checked);
       });
       body.appendChild(row);
-    });
-    const table = el("table", { class: "combos" }, [
-      el("thead", {}, [el("tr", {}, [
-        el("th", { class: "tick", text: "選択" }),
-        el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }),
-      ])]),
-      body,
-    ]);
+    }
+    more.addEventListener("click", function () { addRows(); setHeight(); });
+    addRows();
+    const headCells = [el("th", { class: "tick", text: "選択" })];
+    if (opts.ranked) headCells.push(el("th", { text: "人気" }));
+    headCells.push(el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }));
+    const table = el("table", { class: "combos" }, [el("thead", {}, [el("tr", {}, headCells)]), body]);
     return {
-      node: el("div", { class: "scroll" }, [table]),
+      node: el("div", { class: "scroll" }, [table, more]),
       sync: function () {
         boxes.forEach(function (pair) { pair.box.checked = picked.isOn(pair.combo); });
       },
@@ -1948,7 +1965,8 @@
       addToSlip(b.key, picked, MODE_LABELS[mode]);
       // 入れ終わったら選択を外す。**二度押しで同じ買い目が積まれる**のを防ぐ
       // （馬の選択はそのままなので、続けて別の組み合わせを選べる）
-      current.forEach(function (combo) { dropped[b.key][combo] = true; });
+      if (mode === "popular") popPicked[b.key] = {};
+      else current.forEach(function (combo) { dropped[b.key][combo] = true; });
       table.sync();
       countPicked();
     });
@@ -1966,7 +1984,10 @@
 
     function refresh() {
       const opts = { ordered: b.ordered, allowSame: b.byFrame };
-      if (mode === "box") {
+      if (mode === "popular") {
+        current = Object.keys(b.odds).filter(function (combo) { return oddsLow(b, combo) != null; });
+        current.sort(function (x, y) { return oddsLow(b, x) - oddsLow(b, y) || x.localeCompare(y); });
+      } else if (mode === "box") {
         current = boxCombos(chosenIn(boxOf(b.key)), b.legs, opts);
       } else if (mode === "nagashi") {
         const state = nagashiOf(b.key);
@@ -1981,7 +2002,7 @@
       }
       // 組み合わせが変わったら、選択は**全部選ばれた状態**に戻す
       const signature = current.join(",");
-      if (lastCombos[b.key] !== signature) {
+      if (mode !== "popular" && lastCombos[b.key] !== signature) {
         lastCombos[b.key] = signature;
         dropped[b.key] = {};
       }
@@ -1989,24 +2010,32 @@
       countBox.appendChild(el("b", { text: String(current.length) }));
       countBox.appendChild(document.createTextNode("点"));
       combosBox.textContent = "";
+      const popular = mode === "popular";
       table = drawCombos(b, current, {
-        isOn: function (combo) { return !(dropped[b.key] || {})[combo]; },
+        isOn: function (combo) {
+          return popular ? !!(popPicked[b.key] || {})[combo] : !(dropped[b.key] || {})[combo];
+        },
         toggle: function (combo, on) {
-          if (on) delete dropped[b.key][combo];
+          if (popular) {
+            popPicked[b.key] = popPicked[b.key] || {};
+            if (on) popPicked[b.key][combo] = true;
+            else delete popPicked[b.key][combo];
+          } else if (on) delete dropped[b.key][combo];
           else dropped[b.key][combo] = true;
           countPicked();
           setHeight();
         },
-      });
+      }, popular ? { ranked: true, limit: 50 } : null);
       combosBox.appendChild(table.node);
       countPicked();
       setHeight();
     }
 
-    if (mode === "box") form.appendChild(drawBox(b, refresh));
+    if (mode === "popular") { /* 馬は選ばない（下の人気順の一覧から選ぶ） */ }
+    else if (mode === "box") form.appendChild(drawBox(b, refresh));
     else if (mode === "nagashi") form.appendChild(drawNagashi(b, refresh));
     else form.appendChild(drawSlots(b, refresh));
-    panel.appendChild(form);
+    if (mode !== "popular") panel.appendChild(form);
 
     const sortWrap = el("div", { class: "sorts" });
     [["odds", "オッズ順"], ["combo", "組み合わせ順"]].forEach(function (pair) {
@@ -2021,17 +2050,21 @@
       sortWrap.appendChild(button);
     });
     resultHead.appendChild(countBox);
-    resultHead.appendChild(sortWrap);
+    if (mode !== "popular") resultHead.appendChild(sortWrap);   // 人気順はオッズの低い順で固定
     resultHead.appendChild(add);
     panel.appendChild(resultHead);
 
     // 1点ずつ選ぶ（全選択・全解除）
     pickLine.appendChild(pickCount);
     [["全選択", true], ["全解除", false]].forEach(function (pair) {
+      if (mode === "popular" && pair[1]) return;       // 人気順は数千点になりうるので全選択は出さない
       const button = el("button", { class: "mini", type: "button", text: pair[0] });
       button.addEventListener("click", function () {
-        dropped[b.key] = {};
-        if (!pair[1]) current.forEach(function (combo) { dropped[b.key][combo] = true; });
+        if (mode === "popular") popPicked[b.key] = {};
+        else {
+          dropped[b.key] = {};
+          if (!pair[1]) current.forEach(function (combo) { dropped[b.key][combo] = true; });
+        }
         table.sync();
         countPicked();
       });
@@ -2040,8 +2073,10 @@
     panel.appendChild(pickLine);
     panel.appendChild(combosBox);
 
-    // 全通りのオッズ（2頭の券種は軸ごとの縦並び、3頭の券種はオッズの低い順）
-    if (b.legs === 2) {
+    // 全通りのオッズ（2頭の券種は軸ごとの縦並び、3頭の券種はオッズの低い順）。人気順は一覧そのものなので出さない
+    if (mode === "popular") {
+      /* 上の一覧がこれにあたる */
+    } else if (b.legs === 2) {
       panel.appendChild(el("h3", { class: "section", text: "オッズ表（全" + b.count + "点）" }));
       panel.appendChild(drawAxes(b));
     } else {

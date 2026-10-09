@@ -493,6 +493,7 @@ def test_a_row_of_the_win_table_can_be_clicked_anywhere(script: str):
 OPEN_UMAREN = """
 render(PAYLOAD);
 NODES.tabs.children[2].click();                       // 馬連のタブ
+press(NODES.panel.byClass("modes")[0], "通常／フォーメーション");   // 最初は人気順なので、フォーメーションへ
 var columns = NODES.panel.byClass("slot");
 var boxes = columns[0].findAll(function (c) { return c.tagName === "input"; });
 var boxes2 = columns[1].findAll(function (c) { return c.tagName === "input"; });
@@ -571,6 +572,7 @@ def test_the_bet_slip_is_sorted_by_bet_type(script, tmp_path):
 render(PAYLOAD);
 // ワイド → 単勝 → 馬連 の順に足す
 NODES.tabs.children[3].click();
+press(NODES.panel.byClass("modes")[0], "通常／フォーメーション");   // 最初は人気順なので、フォーメーションへ
 var w = NODES.panel.byClass("slot");
 w[0].findAll(function (c) { return c.tagName === "input"; })[0].click();
 w[1].findAll(function (c) { return c.tagName === "input"; })[1].click();
@@ -643,6 +645,7 @@ def test_moving_to_another_bet_type_clears_the_selection(script, tmp_path):
     answer = run_component(script, """
 render(PAYLOAD);
 NODES.tabs.children[2].click();                       // 馬連
+press(NODES.panel.byClass("modes")[0], "通常／フォーメーション");   // 最初は人気順なので、フォーメーションへ
 var columns = NODES.panel.byClass("slot");
 [1, 3, 5].forEach(function (i) {
   columns[0].findAll(function (c) { return c.tagName === "input"; })[i].click();
@@ -690,6 +693,7 @@ def test_the_add_button_sits_at_the_far_end_of_the_row(script, tmp_path):
     answer = run_component(script, """
 render(PAYLOAD);
 NODES.tabs.children[2].click();
+press(NODES.panel.byClass("modes")[0], "通常／フォーメーション");   // 最初は人気順なので、フォーメーションへ
 var row = NODES.panel.byClass("result-head")[0];
 var answer = {
   order: row.children.map(function (c) { return c.attrs["class"] || c.tagName; }),
@@ -814,6 +818,7 @@ def test_a_horse_chosen_on_both_sides_counts_as_the_axis(script, tmp_path):
 OPEN = """
 render(PAYLOAD);
 NODES.tabs.children[2].click();                       // 馬連
+press(NODES.panel.byClass("modes")[0], "通常／フォーメーション");   // 最初は人気順なので、フォーメーションへ
 function count() { return NODES.panel.byClass("count")[0].text(); }
 function columns() { return NODES.panel.byClass("slot"); }
 function heads() {
@@ -826,21 +831,50 @@ function tick(column, i) {
 
 
 @needs_jsc
-def test_formation_is_the_default_way_to_choose(script, tmp_path):
-    """既定は今までどおりフォーメーション（列が券種の頭数だけ出る）。"""
-    answer = run_component(script, OPEN + """
+def test_popular_order_is_the_first_tab_and_formation_is_one_of_the_others(script, tmp_path):
+    """買い方は 人気順（最初に開く）／通常・フォーメーション／ながし／ボックス。"""
+    answer = run_component(script, """
+render(PAYLOAD);
+NODES.tabs.children[2].click();                       // 馬連
+var bar = NODES.panel.byClass("modes")[0];
 var answer = {
-  modes: NODES.panel.byClass("modes")[0].findAll(function (c) { return c.tagName === "button"; })
-    .map(function (b) { return b.text(); }),
-  pressed: NODES.panel.byClass("modes")[0].findAll(function (c) {
-    return c.attrs["aria-pressed"] === "true";
-  }).map(function (b) { return b.text(); }),
-  columns: columns().length,
+  modes: bar.findAll(function (c) { return c.tagName === "button"; }).map(function (b) { return b.text(); }),
+  pressed: bar.findAll(function (c) { return c.attrs["aria-pressed"] === "true"; }).map(function (b) { return b.text(); }),
+  columns: NODES.panel.byClass("slot").length,
 };
+press(bar, "通常／フォーメーション");
+answer.columnsAfter = NODES.panel.byClass("slot").length;
 """, tmp_path)
-    assert answer["modes"] == ["通常／フォーメーション", "ながし", "ボックス"]
-    assert answer["pressed"] == ["通常／フォーメーション"]
-    assert answer["columns"] == 2            # 馬連は1頭目・2頭目
+    assert answer["modes"] == ["人気順", "通常／フォーメーション", "ながし", "ボックス"]
+    assert answer["pressed"] == ["人気順"]
+    assert answer["columns"] == 0             # 人気順は馬の列を出さない
+    assert answer["columnsAfter"] == 2        # 馬連は1頭目・2頭目
+
+
+@needs_jsc
+def test_popular_order_lists_every_combination_by_odds_and_adds_only_the_ticked(script, tmp_path):
+    """人気順: オッズの低い順に人気の番号つきで並ぶ。最初は何も選ばず、選んだ分だけが買い目に入る。"""
+    answer = run_component(script, """
+render(PAYLOAD);
+NODES.tabs.children[2].click();                       // 馬連
+var table = NODES.panel.byClass("combos")[0];
+function oddsCol() { return table.findAll(function (c) { return c.tagName === "tr"; })
+  .filter(function (r) { return r.byClass("odds").length; }).map(function (r) { return Number(r.byClass("odds")[0].text()); }); }
+var ranks = table.byClass("rank").map(function (c) { return c.text(); });
+var odds = oddsCol();
+var start = NODES.panel.byClass("pick-count")[0].text();
+table.findAll(function (c) { return c.tagName === "input"; })[1].click();
+var one = NODES.panel.byClass("pick-count")[0].text();
+press(NODES.panel, "買い目へ追加");
+var answer = { ranks: ranks.slice(0, 3), sorted: odds.every(function (v, i) { return i === 0 || odds[i - 1] <= v; }),
+               start: start.slice(0, 5), one: one.slice(0, 5), kinds: NODES.slip.byClass("kind").map(function (k) { return k.text(); }),
+               pts: NODES.slip.byClass("pts").map(function (p) { return p.text(); }) };
+""", tmp_path)
+    assert answer["ranks"] == ["1", "2", "3"]
+    assert answer["sorted"] is True
+    assert answer["start"] == "選択 0/"
+    assert answer["one"] == "選択 1/"
+    assert answer["kinds"] == ["人気順"] and answer["pts"] == ["1点"]
 
 
 @needs_jsc
@@ -1426,6 +1460,7 @@ def test_phone_bar_adds_the_picked_combinations(script, tmp_path):
     """馬連などでは、左半分にパネルで選んだ点数が出て、押すとパネルの追加と同じく買い目に入る。"""
     answer = run_component(script, PHONE + """
 NODES.tabs.children[2].click();                       // 馬連のタブ
+press(NODES.panel.byClass("modes")[0], "通常／フォーメーション");   // 最初は人気順なので、フォーメーションへ
 var empty = bar().text();
 var columns = NODES.panel.byClass("slot");
 columns[0].findAll(function (c) { return c.tagName === "input"; })[0].click();
