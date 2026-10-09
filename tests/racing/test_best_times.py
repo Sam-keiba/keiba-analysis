@@ -164,7 +164,7 @@ def test_the_hardness_column_follows_the_surface():
 
 
 def test_the_columns_are_in_the_order_you_read_them():
-    """左から 馬番・馬名・着順・タイム・上り・前後3F・ペース・脚質・開催・馬場・硬さ。
+    """左から 馬名・着順・タイム・前後3F・ペース・脚質・上り・開催・馬場・硬さ。
 
     着順を前に置くのは「何着のときの時計か」を先に見たいから。
     """
@@ -173,7 +173,7 @@ def test_the_columns_are_in_the_order_you_read_them():
     html = render_best_times(ENTRIES, ROWS, "turf")
     heads = [re.sub(r"<[^>]+>", "", h)
              for h in re.findall(r"<th[^>]*>(.*?)</th>", html)]
-    assert heads == ["馬番", "馬名", "着順", "タイム", "上り", "前後3F", "ペース", "脚質",
+    assert heads == ["馬名", "着順", "タイム", "前後3F", "ペース", "脚質", "上り",
                      "開催", "馬場", "ク"]
 
 
@@ -185,8 +185,8 @@ def test_the_cells_follow_the_same_order_as_the_headings():
     first_row = html.split("<tbody>")[1].split("</tr>")[0]
     cells = [re.sub(r"<[^>]+>", "", c)
              for c in re.findall(r"<td[^>]*>(.*?)</td>", first_row)]
-    assert cells == ["3", "ロブチェン", "1着", "2:22.7", "33.2", "34.2-34.5",
-                     "M", "逃げ", "東京", "良", "9.4"]
+    assert cells == ["ロブチェン", "1着", "2:22.7", "34.2-34.5",
+                     "M", "逃げ", "33.2", "東京", "良", "9.4"]
 
 
 def test_the_pace_of_the_race_is_shown_next_to_the_time():
@@ -222,7 +222,7 @@ def test_the_date_is_kept_in_the_tooltip_only():
 def test_waku_colour_and_finish_colour():
     html = render_best_times(ENTRIES, ROWS)
     assert 'class="waku" style="background:#000' not in html   # 2枠は白地に黒
-    assert ">3<" in html                                        # 馬番を枠色で出す
+    assert "bt-waku" not in html                                # 馬番の列は無い
     assert "1着" in html and "#189a54" in html                  # 3着以内は緑（資料どおり）
     assert "5着" in html                                        # 4着以下は色を付けない
 

@@ -143,7 +143,7 @@ def _row_title(row: dict) -> str:
 def render_best_times(entries: list[dict], rows: list[dict], surface: str | None = None) -> str:
     """持ちタイムの表。記録がある馬だけを速い順に並べる。
 
-    列は 馬番・馬名・着順・タイム・上り・前後3F・ペース・脚質・開催・馬場・硬さ。
+    列は 馬名・着順・タイム・前後3F・ペース・脚質・上り・開催・馬場・硬さ（馬番の列は無い）。
     着順を前に置くのは「何着のときの時計か」を先に見たいから。
     **開催と馬場と硬さは別々のマス**にする（まとめると見比べにくいため）。
     `surface` は硬さの列の見出しを決めるのに使う（タブが馬場ごとなので混ざらない）。
@@ -156,10 +156,10 @@ def render_best_times(entries: list[dict], rows: list[dict], surface: str | None
     lines = [
         # 列幅は table-layout: fixed で決まるので、見出し側にも同じクラスを付ける
         "<div class='best-times-wrap'><table class='best-times'>"
-        "<thead><tr><th class='bt-waku'>馬番</th><th class='bt-name'>馬名</th>"
+        "<thead><tr><th class='bt-name'>馬名</th>"
         "<th class='bt-finish'>着順</th><th class='bt-time'>タイム</th>"
-        "<th class='bt-num'>上り</th><th class='bt-split'>前後3F</th>"
-        "<th class='bt-pace'>ペース</th><th class='bt-style'>脚質</th>"
+        "<th class='bt-split'>前後3F</th><th class='bt-pace'>ペース</th>"
+        "<th class='bt-style'>脚質</th><th class='bt-num'>上り</th>"
         "<th class='bt-venue'>開催</th><th class='bt-going'>馬場</th>"
         f"<th class='bt-hard'>{escape(hardness_head(surface))}</th>"
         "</tr></thead><tbody>"
@@ -171,14 +171,14 @@ def render_best_times(entries: list[dict], rows: list[dict], surface: str | None
         last_3f = row.get("last_3f")
         last_3f_text = DASH if last_3f is None else f"{float(last_3f):.1f}"
         lines.append(
-            f"<tr title='{_row_title(row)}'><td class='bt-waku'>{_waku_badge(entry)}</td>"
+            f"<tr title='{_row_title(row)}'>"
             f"<td class='bt-name'><div title='{name}'>{name}</div></td>"
             f"<td class='bt-finish'>{_finish_cell(row)}</td>"
             f"<td class='bt-time'>{escape(format_race_time(row.get('time_sec')))}</td>"
-            f"<td class='bt-num'>{last_3f_text}</td>"
             f"<td class='bt-split'>{escape(splits_label(row))}</td>"
             f"<td class='bt-pace'>{pace_mark(row) or DASH}</td>"
             f"<td class='bt-style'>{_style_cell(row)}</td>"
+            f"<td class='bt-num'>{last_3f_text}</td>"
             f"<td class='bt-venue'>{escape(row.get('venue_name') or DASH)}</td>"
             f"<td class='bt-going'>{escape(row.get('going') or DASH)}</td>"
             f"<td class='bt-hard'>{escape(hardness_text(row))}</td></tr>"
