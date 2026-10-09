@@ -430,7 +430,10 @@
   /* --- スマホ（payload.layout = "phone"。docs/design_handoff の Mobile 版） -------------
      部品の高さを「画面の高さ − ヘッダー・タブバー」に固定して、中でスクロールさせる。
      下部バー（買い目 N点 ↑）と、下から開く買い目シートは部品の中の fixed で出す。 */
-  body.phone { height: 100vh; overflow-y: auto; overflow-x: hidden; padding-bottom: 76px; }
+  /* スクロールするのは body 自身（html は動かさない）。html を visible のままにすると body の overflow が
+     画面全体に移り、iPhoneで部品の中が指でスクロールできなくなることがある */
+  html:has(body.phone) { height: 100%; overflow: hidden; }
+  body.phone { height: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 76px; box-sizing: border-box; }
   body.phone .wrap { display: block; }
   body.phone .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   body.phone .tab { flex: 0 0 auto; height: 44px; }
