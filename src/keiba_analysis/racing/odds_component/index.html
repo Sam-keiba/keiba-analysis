@@ -571,7 +571,6 @@
     width: 36px; height: 36px; padding: 0; justify-content: center; box-shadow: none; flex: none;
   }
   .import-pill.round .ic { font-size: 18px; }
-  .import-pill.round.running .ic { font-size: 10px; font-weight: 700; }
 
   /* 買い目: 帯と券種のピルは緑（資料）。単勝・複勝は枠色の馬番＋馬名 */
   .g { border-left-color: var(--accent) !important; }
@@ -1484,11 +1483,11 @@
     else if (progress && progress.finished) label = "✓ 取り込み済み " + progress.finished + "現在";
     else label = "↻ この券種を更新";
     // スマホは資料どおり36pxの丸い ↻ だけ（取り込み中は％、済んだら ✓。下から淡緑が濃くなる）
-    const icon = running ? percent + "%" : (progress && progress.finished ? "✓" : "↻");
+    const icon = "↻";                 // ずっと更新マークのまま（取り込み中は下から色が濃くなるだけ）
     const button = el("button", {
       class: "import-pill" + (running ? " running" : "") + " round", type: "button",
       title: "いま開いている券種だけを更新する", "aria-label": label,
-    }, [el("span", { class: "ic", text: icon })]);   // 文字は出さない（↻ ／ 取り込み中は％ ／ ✓）
+    }, [el("span", { class: "ic", text: icon })]);   // 文字は出さない（いつも ↻）
     if (running) {
       button.style.background = "linear-gradient(0deg, #d5dbe2 " + percent + "%, #f4f6f8 " + percent + "%)";
       button.setAttribute("disabled", "disabled");
@@ -1497,7 +1496,7 @@
       if (running) return;
       importing = true;
       button.setAttribute("disabled", "disabled");
-      button.textContent = "0%";
+      button.textContent = "↻";
       requestFetchMany([active]);
     });
     return button;
