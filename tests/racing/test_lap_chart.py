@@ -206,8 +206,8 @@ def test_lines_are_thick_enough_to_read():
 
 
 def test_default_number_of_runs():
-    """既定は3走（資料どおり。画面のスライダーで5走まで増やせる）。"""
-    assert DEFAULT_CHART_RUNS == 3
+    """既定は5走（画面のスライダーで10走まで増やせる）。"""
+    assert DEFAULT_CHART_RUNS == 5
 
 
 def test_phase_axis_is_fixed_between_10_5_and_13_5():
