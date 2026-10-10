@@ -128,6 +128,17 @@
   body.phone table.poprank .pr-in { gap: 6px; }
   body.phone table.poprank .pr-in .nm { font-size: 14px; }
   body.phone table.poprank td.pr-odds { font-size: 15px; }
+  /* スマホの3頭の券種（3連複・3連単）は、馬の列が3つ＋印で幅が足りない。字と余白を詰めて右端のオッズまで全部見せる */
+  body.phone table.single.poprank td, body.phone table.single.poprank th { padding: 6px 1px; }
+  body.phone table.single.poprank td { height: 48px; }
+  body.phone table.single.poprank td.tick, body.phone table.single.poprank th.tick { width: 26px; padding: 0 2px; }
+  body.phone table.single.poprank td.pop { font-size: 10px; }
+  body.phone table.single.poprank .pr-in { gap: 2px; }
+  body.phone table.single.poprank .pr-in .num { min-width: 20px; padding: 1px 0; font-size: 12px; }
+  body.phone table.single.poprank .pr-in .mk { min-width: 0.9em; font-size: 11px; }
+  body.phone table.single.poprank .pr-in .nm { font-size: 11px; }
+  body.phone table.single.poprank td.pr-odds { font-size: 13px; padding-right: 4px; }
+  body.phone table.single.poprank th { font-size: 10px; }
   .more-rows { display: block; margin: 10px auto; }
 
   /* --- 単勝・複勝の一覧（1つの表に両方の列を並べる） --- */
