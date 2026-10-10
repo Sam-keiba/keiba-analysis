@@ -707,8 +707,6 @@
   const UNORDERED_HEADS = ["1頭目", "2頭目", "3頭目"];
   // 枠連だけは馬ではなく枠を選ぶ
   const FRAME_HEADS = ["1枠目", "2枠目"];
-  // 3連複・3連単は全通りの表が大きすぎるので、オッズの低い順に切って出す
-  const TOP_N = 50;
   const DEFAULT_AMOUNT = 100;     // 1点あたりの既定の金額
 
   /** 馬券は100円単位。金額を100円単位にそろえる（四捨五入。0や空や100円未満は100円）。 */
@@ -2041,26 +2039,6 @@
     };
   }
 
-  function drawTop(b) {
-    const combos = Object.keys(b.odds).filter(function (combo) { return oddsLow(b, combo) != null; });
-    combos.sort(function (x, y) { return oddsLow(b, x) - oddsLow(b, y); });
-    const body = el("tbody", {});
-    combos.slice(0, TOP_N).forEach(function (combo, i) {
-      body.appendChild(el("tr", {}, [
-        el("td", { class: "pop", "data-rank": i + 1 <= 3 ? String(i + 1) : null, text: String(i + 1) }),
-        comboCells(b, combo),
-        el("td", { class: "odds" + hot(oddsLow(b, combo)), text: oddsText(b, combo) }),
-      ]));
-    });
-    const table = el("table", { class: "combos" }, [
-      el("thead", {}, [el("tr", {}, [
-        el("th", { text: "人気" }), el("th", { text: "組み合わせ" }), el("th", { text: "オッズ" }),
-      ])]),
-      body,
-    ]);
-    return el("div", { class: "scroll" }, [table]);
-  }
-
   // --- 1つのタブぶんの中身 -------------------------------------------------------
 
   function drawPanel(animate) {
@@ -2244,17 +2222,7 @@
     panel.appendChild(pickLine);
     panel.appendChild(combosBox);
 
-    // 全通りのオッズ（2頭の券種は軸ごとの縦並び、3頭の券種はオッズの低い順）。人気順は一覧そのものなので出さない
-    if (mode === "popular") {
-      /* 上の一覧がこれにあたる */
-    } else if (b.legs === 2) {
-      /* 軸ごとのオッズ表は出さない（不要） */
-    } else {
-      panel.appendChild(el("h3", {
-        class: "section", text: "オッズの低い順（全" + b.count + "点のうち" + TOP_N + "点）",
-      }));
-      panel.appendChild(drawTop(b));
-    }
+    // 「オッズの低い順」の表・軸ごとのオッズ表は出さない（不要。人気順の一覧がその役目）
     refresh();
   }
 
