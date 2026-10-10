@@ -114,7 +114,7 @@ def build_payload(
     focus: str | None = None, slip: list[dict] | None = None,
     slip_saved_at: str | None = None, read_only: bool = False,
     layout: str = "pc", reserve_px: int = 0, race_id: str | None = None,
-    progress: dict | None = None, ipat: dict | None = None,
+    progress: dict | None = None,
 ) -> dict:
     """オッズのコンポーネントに渡す中身をまとめる。
 
@@ -126,8 +126,6 @@ def build_payload(
     `focus` はいま取り込んだ券種で、コンポーネントはそのタブを開く
     （押した券種が見えないと、取り込めたのかどうか分かりにくいため）。
     `layout="phone"` はスマホ版の見た目（下部バー＋下から開く買い目シート）。
-    `ipat` は「IPAT投票」で直して確かめた明細（`ipat.IpatTicket.to_dict()` ＋ 送り方の結果 `send` と `at`）。
-    買い目と同じく `drawVersion` には入れない（確認を出すだけで、表は作り直さない）。
     `slip` はDBに保存してある買い目、`slip_saved_at` はその保存時刻
     （コンポーネントが「自分が出したばかりの保存より古い中身」を見分けるのに使う）。
 
@@ -170,7 +168,6 @@ def build_payload(
     payload["drawVersion"] = payload_version(payload)
     payload["slip"] = slip or []
     payload["slipSavedAt"] = slip_saved_at
-    payload["ipat"] = ipat
     payload["version"] = payload_version(payload)
     return payload
 

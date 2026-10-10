@@ -163,15 +163,15 @@ def test_the_value_goes_back_only_from_one_place(script: str):
 
     以前の予想印が「押すたびに飛ぶ」で使いものにならなかったので、
     **チェック・タブ・並べ替えでは返さない**（ブラウザの中だけで完結させる）。
-    返すのは「更新マークを押した」「買い目が変わった」「IPAT投票を押した」だけ。
+    返すのは「更新マークを押した」「買い目が変わった」の2つだけ。
     """
     assert script.count("streamlit:setComponentValue") == 1
     assert take_function(script, "sendValue").count("streamlit:setComponentValue") == 1
-    # 値を送る道はこの4つだけ（更新マーク・買い目の券種をまとめて更新・IPAT投票の確認・買い目の保存）
-    senders = [name for name in ("requestFetch", "requestFetchMany", "requestIpat", "saveSlip")
+    # 値を送る道はこの3つだけ（更新マーク・買い目の券種をまとめて更新・買い目の保存）
+    senders = [name for name in ("requestFetch", "requestFetchMany", "saveSlip")
                if "sendValue(" in take_function(script, name)]
-    assert senders == ["requestFetch", "requestFetchMany", "requestIpat", "saveSlip"]
-    assert script.count("sendValue(") == 5        # 定義1つ＋上の4か所
+    assert senders == ["requestFetch", "requestFetchMany", "saveSlip"]
+    assert script.count("sendValue(") == 4        # 定義1つ＋上の3か所
 
 
 def test_choosing_a_horse_does_not_send_anything(script: str):
@@ -231,16 +231,14 @@ def test_the_same_height_is_not_sent_twice(script: str):
 # --- 購入の導線を作らない ---------------------------------------------------------------
 
 
-def test_the_component_never_votes_or_asks_for_secrets(source: str):
-    """「IPAT投票」は確認を出してIPATの入口を開くだけ。**部品は投票しない・ログイン情報を扱わない**。
+def test_there_is_no_way_to_buy_anything(source: str):
+    """スコープ外。買い目（買うつもりの控え）は作るが、**購入・投票はしない**。
 
-    - JRA・IPATへ自分から通信しない（fetch・XMLHttpRequest・フォーム送信を持たない）
-    - 暗証番号などの入力欄（password）を持たない
-    - IPATのURLを部品に書かない（開く先はPython側の送り方が決める）
+    コメント（`<!-- … -->`）にはその方針そのものを書いてあるので、外して見る。
     """
-    for word in ("fetch(", "XMLHttpRequest", ".submit(", 'type: "password"', "type=\"password\""):
-        assert word not in source, word
-    assert "jra.go.jp" not in source
+    visible = re.sub(r"<!--.*?-->", "", source, flags=re.S)
+    for word in ("購入", "投票", "IPAT", "カート", "馬券を買"):
+        assert word not in visible, word
 
 
 def test_the_bet_slip_is_only_a_note_of_what_to_buy(source: str):
@@ -1609,58 +1607,3 @@ var answer = { heads: heads, cells: row.byClass("pr-h").length,
     assert answer["heads"] == ["選択", "人気", "1頭目", "2頭目", "オッズ"]
     assert answer["cells"] == 2
     assert all(n <= 2 for n in answer["names"])
-
-
-# --- IPAT投票（確認を出すだけ） --------------------------------------------------------
-
-
-@needs_jsc
-def test_the_ipat_button_sends_the_slip_for_checking(script, tmp_path):
-    """「IPAT投票」は買い目を確認のためにPythonへ渡すだけ。空のうちは押せない。"""
-    answer = run_component(script, """
-render(PAYLOAD);
-function ipatButton() { return NODES.slip.find(function (c) { return c.tagName === "button" && c.text() === "IPAT投票"; }); }
-var emptyDisabled = ipatButton().attrs.disabled === "disabled";
-NODES.panel.byClass("tick")[0].children[0].click();
-press(NODES.panel, "選んだ馬を単勝へ");
-ipatButton().click();
-var sent = SENT[SENT.length - 1];
-var answer = { emptyDisabled: emptyDisabled, kind: sent.kind,
-               groups: sent.groups.map(function (g) { return [g.bet, g.combos, g.amount]; }) };
-""", tmp_path)
-    assert answer["emptyDisabled"] is True
-    assert answer["kind"] == "ipat"
-    assert answer["groups"] == [["tansho", ["1"], 100]]
-
-
-@needs_jsc
-def test_the_ipat_check_shows_the_lines_and_only_a_link(script, tmp_path):
-    """Pythonから届いた確認を出す: レース・明細・合計と、IPATを開くリンク（新しいタブ）。"""
-    answer = run_component(script, """
-var payload = JSON.parse(JSON.stringify(PAYLOAD));
-payload.ipat = { at: 1, raceDate: "2026-10-10", raceLabel: "東京11R", postTime: "15:45",
-  lines: [{ bet: "umaren", label: "馬連", combo: "1-12", amount: 500 }], points: 1, total: 500,
-  ok: true, errors: [], warnings: [],
-  send: { mode: "manual", ok: true, url: "https://example.invalid/ipat", lines: ["馬連 1-12 500円"] } };
-render(payload);
-var sheet = document.getElementById("ipat-sheet");
-var link = sheet.find(function (c) { return c.tagName === "a"; });
-var answer = { text: sheet.text(), href: link.attrs.href, target: link.attrs.target };
-""", tmp_path)
-    assert "東京11R" in answer["text"] and "15:45発走" in answer["text"]
-    assert "馬連" in answer["text"] and "1-12" in answer["text"] and "500円" in answer["text"]
-    assert answer["href"] == "https://example.invalid/ipat" and answer["target"] == "_blank"
-
-
-@needs_jsc
-def test_the_ipat_check_with_errors_has_no_link(script, tmp_path):
-    answer = run_component(script, """
-var payload = JSON.parse(JSON.stringify(PAYLOAD));
-payload.ipat = { at: 2, raceLabel: "東京11R", lines: [], points: 0, total: 0, ok: false,
-  errors: ["発走時刻（15:45）を過ぎています。"], warnings: [], send: { ok: false, url: null } };
-render(payload);
-var sheet = document.getElementById("ipat-sheet");
-var answer = { text: sheet.text(), links: sheet.findAll(function (c) { return c.tagName === "a"; }).length };
-""", tmp_path)
-    assert "発走時刻（15:45）を過ぎています" in answer["text"]
-    assert answer["links"] == 0
