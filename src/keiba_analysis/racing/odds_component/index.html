@@ -656,7 +656,8 @@
     border: 1px solid #b4bdc8; border-radius: 4px !important;
   }
   body.phone .g-money .sub { font-size: 16px; }
-  body.phone .slip-foot { padding: 14px 12px; }
+  /* 下に64px空ける: Streamlit Cloudの「Manage app」タグが右下に重なって、合計金額が隠れていた */
+  body.phone .slip-foot { padding: 14px 12px 64px; }
   body.phone .slip-foot .mini {
     height: 44px; border-radius: 6px !important; background: #fbfbfc !important; color: var(--ink) !important;
     box-shadow: none;
