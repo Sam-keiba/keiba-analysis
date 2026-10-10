@@ -2019,40 +2019,6 @@
     };
   }
 
-  // --- 軸ごとのオッズ表（netkeibaと同じ縦並び） -----------------------------------
-
-  function drawAxes(b) {
-    const items = itemsOf(b);
-    const groups = {};
-    Object.keys(b.odds).forEach(function (combo) {
-      const parts = combo.split("-");
-      const axis = parts.slice(0, b.legs - 1).join("-");
-      (groups[axis] = groups[axis] || []).push(parts[parts.length - 1]);
-    });
-    const byNumber = {};
-    items.forEach(function (item) { byNumber[item.number] = item; });
-    const wrap = el("div", { class: "axes" });
-    Object.keys(groups).sort(function (x, y) {
-      const a = x.split("-").map(Number), c = y.split("-").map(Number);
-      for (let i = 0; i < a.length; i++) { if (a[i] !== c[i]) return a[i] - c[i]; }
-      return 0;
-    }).forEach(function (axis) {
-      const body = el("tbody", {});
-      groups[axis].map(Number).sort(function (a, c) { return a - c; }).forEach(function (number) {
-        const combo = axis + "-" + number;
-        const low = oddsLow(b, combo);
-        const item = byNumber[number] || { number: number, bg: "#e8ecf0", fg: "#6f7c8b" };
-        body.appendChild(el("tr", {}, [
-          el("td", { class: "p" }, [numberChip(item)]),
-          el("td", { class: "odds" + (low == null ? " miss" : ""), text: oddsText(b, combo) }),
-        ]));
-      });
-      const caption = el("caption", { text: axis.split("-").join(" - ") });
-      wrap.appendChild(el("table", { class: "axis" }, [caption, body]));
-    });
-    return wrap;
-  }
-
   function drawTop(b) {
     const combos = Object.keys(b.odds).filter(function (combo) { return oddsLow(b, combo) != null; });
     combos.sort(function (x, y) { return oddsLow(b, x) - oddsLow(b, y); });
@@ -2260,9 +2226,7 @@
     if (mode === "popular") {
       /* 上の一覧がこれにあたる */
     } else if (b.legs === 2) {
-      if (phone) { refresh(); return; }   // スマホは不要（上の一覧で足りる）
-      panel.appendChild(el("h3", { class: "section", text: "オッズ表（全" + b.count + "点）" }));
-      panel.appendChild(drawAxes(b));
+      /* 軸ごとのオッズ表は出さない（不要） */
     } else {
       panel.appendChild(el("h3", {
         class: "section", text: "オッズの低い順（全" + b.count + "点のうち" + TOP_N + "点）",
