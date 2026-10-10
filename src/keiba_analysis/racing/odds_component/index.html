@@ -848,6 +848,7 @@
   function bodyClass(name, on) {
     const body = document.body;
     if (body && body.classList && body.classList.toggle) body.classList.toggle(name, !!on);
+    if (name === "sheet-open") syncBar();
   }
 
   /**
@@ -857,8 +858,60 @@
    * 組み合わせの券種（馬連など）はパネルで選んだ点数を出し、押すとパネルの追加と同じ動きをする。
    * 単勝・複勝のように追加先が2つあるタブでは、押すとバーの上に「単勝へ」「複勝へ」を出して選ばせる。
    */
+  let barBuilt = false;
+
+  /**
+   * 下のバーを置く文書。**親ページ**（同じオリジンなので触れる）に置くと、ブラウザ自身の fixed で
+   * 画面の下に付くので、スクロールしても震えない。部品の中に置いて JS で位置を追いかけると、
+   * iPhone ではスクロールのイベントが遅れてバーが小刻みに震えた。触れなければ部品の中に置く。
+   */
+  function barHost() {
+    try {
+      const doc = window.parent && window.parent.document;
+      if (doc && doc.body && window.frameElement && doc !== document) return doc;
+    } catch (e) { /* 親が読めない */ }
+    return document;
+  }
+  function barEl(id) { return barHost().getElementById(id); }
+
+  const BAR_STYLE = [
+    "#phone-bar{position:fixed;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:456px;",
+    "bottom:calc(40px + env(safe-area-inset-bottom,0px));height:58px;z-index:60;display:flex;align-items:stretch;",
+    "background:#171c23;color:#fff;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.3);overflow:hidden;font-weight:700}",
+    "#phone-bar button{flex:1;height:100%;min-height:0;border:none;border-radius:0;padding:0 10px;background:transparent;",
+    "color:#fff;font:inherit;font-weight:700;font-size:14px;appearance:none;-webkit-appearance:none}",
+    "#phone-bar-add{background:#535f6d !important}#phone-bar-add.on{background:#3b4552 !important}",
+    "#phone-bar-open{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-left:1px solid #555 !important}",
+    "#phone-bar-open span{font-size:11px;font-weight:400}#phone-bar-open b{font-size:16px;font-weight:700}",
+    "#phone-bar-choice{display:none;position:fixed;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:456px;",
+    "bottom:calc(108px + env(safe-area-inset-bottom,0px));z-index:61;gap:8px}",
+    "#phone-bar-choice.open{display:flex}",
+    "#phone-bar-choice button{flex:1;height:44px;border:none;border-radius:999px;background:#fff;color:#535f6d;",
+    "font:inherit;font-size:15px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.3);appearance:none;-webkit-appearance:none}",
+    "#phone-bar.keiba-hidden,#phone-bar-choice.keiba-hidden{display:none !important}",
+  ].join("");
+
+  let frameVisible = true;
+  /** 親ページに置いたバーは、オッズが見えていないとき（別のタブ）と、買い目シートが開いているときは隠す。 */
+  function syncBar() {
+    const host = barHost();
+    if (host === document) return;
+    const hide = !frameVisible || document.body.classList.contains("sheet-open");
+    ["phone-bar", "phone-bar-choice"].forEach(function (id) {
+      const node = host.getElementById(id);
+      if (node) node.classList.toggle("keiba-hidden", hide);
+    });
+  }
+
   function ensurePhoneBar() {
-    if (!phone || document.getElementById("phone-bar") || !document.body) return;
+    if (!phone || barBuilt || !document.body) return;
+    barBuilt = true;
+    const host = barHost();
+    // 前の部品（レースを変えて作り直される前のもの）が親ページに残したバーは片づける
+    ["phone-bar", "phone-bar-choice", "keiba-odds-bar-style"].forEach(function (id) {
+      const old = host === document ? null : host.getElementById(id);
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+    });
     const backdrop = el("div", { id: "sheet-backdrop" });
     backdrop.addEventListener("click", function () { bodyClass("sheet-open", false); });
     const add = el("button", { type: "button", id: "phone-bar-add", text: "買い目へ追加(0頭)" });
@@ -871,8 +924,31 @@
     const choice = el("div", { id: "phone-bar-choice" });
     const bar = el("div", { id: "phone-bar" }, [add, open]);
     document.body.appendChild(backdrop);
-    document.body.appendChild(choice);
-    document.body.appendChild(bar);
+    if (host === document) {
+      document.body.appendChild(choice);
+      document.body.appendChild(bar);
+      return;
+    }
+    const style = host.createElement("style");
+    style.id = "keiba-odds-bar-style";
+    style.textContent = BAR_STYLE;
+    host.head.appendChild(style);
+    host.body.appendChild(choice);
+    host.body.appendChild(bar);
+    // 見えているときだけ出す（別のタブを開いたらバーも消す）
+    try {
+      const observer = new window.parent.IntersectionObserver(function (entries) {
+        frameVisible = entries.some(function (e) { return e.isIntersecting; });
+        syncBar();
+      });
+      observer.observe(window.frameElement);
+    } catch (e) { /* 見張れなければ出したままにする */ }
+    window.addEventListener("pagehide", function () {
+      [bar, choice, style].forEach(function (node) {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      });
+    });
+    syncBar();
   }
 
   function pickedSingles() {
@@ -894,7 +970,7 @@
       const choice = document.getElementById("slip-add-choice");
       if (choice) { choice.textContent = ""; choice.classList.remove("open"); }
     }
-    const add = document.getElementById("phone-bar-add");
+    const add = barEl("phone-bar-add");
     if (!add) return;
     add.textContent = "買い目へ追加(" + n + (single ? "頭)" : "点)");
     add.classList.toggle("on", n > 0);
@@ -924,7 +1000,7 @@
   }
 
   function hidePhoneChoice() {
-    const choice = document.getElementById("phone-bar-choice");
+    const choice = barEl("phone-bar-choice");
     if (choice) { choice.textContent = ""; choice.classList.remove("open"); }
   }
 
@@ -950,7 +1026,7 @@
     if (!pickedSingles().length) return;
     const bets = t.bets.map(bet).filter(function (b) { return !!b; });
     if (bets.length === 1) { addSinglesTo(bets[0].key); return; }
-    const choice = document.getElementById("phone-bar-choice");
+    const choice = barEl("phone-bar-choice");
     if (choice.classList.contains("open")) { hidePhoneChoice(); return; }
     choice.textContent = "";
     bets.forEach(function (b) {
@@ -1463,9 +1539,9 @@
     box.appendChild(el("span", { text: totals.points + "点" }));
     box.appendChild(el("span", { class: "yen", text: yenText(totals.yen) }));
     // スマホの下部バーにも同じ合計を出す
-    const count = document.getElementById("phone-bar-count");
+    const count = barEl("phone-bar-count");
     if (count) count.textContent = "買い目 " + totals.points + "点 ▲";
-    const total = document.getElementById("phone-bar-total");
+    const total = barEl("phone-bar-total");
     if (total) total.textContent = yenText(totals.yen);
   }
 
