@@ -2260,6 +2260,7 @@
     if (mode === "popular") {
       /* 上の一覧がこれにあたる */
     } else if (b.legs === 2) {
+      if (phone) { refresh(); return; }   // スマホは不要（上の一覧で足りる）
       panel.appendChild(el("h3", { class: "section", text: "オッズ表（全" + b.count + "点）" }));
       panel.appendChild(drawAxes(b));
     } else {
