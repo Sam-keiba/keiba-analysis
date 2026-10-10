@@ -436,12 +436,12 @@
   .slip-total span:first-child { font-size: 14px; font-weight: 700; }
   .slip-total .yen { font: 700 28px 'Figtree', 'IBM Plex Sans JP', sans-serif; color: var(--accent-700); }
   /* --- スマホ（payload.layout = "phone"。docs/design_handoff の Mobile 版） -------------
-     部品の高さを「画面の高さ − ヘッダー・タブバー」に固定して、中でスクロールさせる。
-     下部バー（買い目 N点 ↑）と、下から開く買い目シートは部品の中の fixed で出す。 */
-  /* スクロールするのは body 自身（html は動かさない）。html を visible のままにすると body の overflow が
-     画面全体に移り、iPhoneで部品の中が指でスクロールできなくなることがある */
-  html:has(body.phone) { height: 100%; overflow: hidden; }
-  body.phone { height: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 76px; box-sizing: border-box; }
+     部品の高さは**中身の高さ**にして、中ではスクロールさせない（ページ全体が1つのスクロールになる。
+     以前は画面の高さに固定して中でスクロールさせていたので、表だけが別に動いて操作しづらかった）。
+     下部バー（買い目 N点 ↑）と、下から開く買い目シートは、画面の下に付いてくるよう
+     JS（trackViewport）が位置を決める（--bar-b / --slip-bottom / --vis-top / --vis-h）。 */
+  html:has(body.phone) { height: auto; overflow: hidden; }
+  body.phone { height: auto; overflow: visible; padding-bottom: 76px; box-sizing: border-box; }
   body.phone .wrap { display: block; }
   body.phone .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   body.phone .tab { flex: 0 0 auto; height: 44px; }
@@ -625,6 +625,15 @@
     box-shadow: 0 6px 20px rgba(0,0,0,.3);
   }
   body.phone { padding-bottom: 90px; }
+  /* 画面に付いてくる部品（バー・追加先のピル・シート・暗幕）。fixed ではなく absolute にして、
+     位置は JS が親ページの画面（見えている範囲）に合わせて --bar-b などに入れる */
+  body.phone #phone-bar { position: absolute; bottom: auto; top: calc(var(--bar-b, 640px) - 58px); }
+  body.phone #phone-bar-choice { position: absolute; bottom: auto; top: calc(var(--bar-b, 640px) - 112px); }
+  body.phone .slip {
+    position: absolute; bottom: var(--slip-bottom, 0px); max-height: calc(var(--vis-h, 600px) * .85);
+  }
+  body.phone:not(.sheet-open) .slip { visibility: hidden; }
+  #sheet-backdrop { position: absolute; inset: auto; left: 0; right: 0; top: var(--vis-top, 0px); height: var(--vis-h, 100%); }
 
   /* スマホの買い目シート（資料: 見出し56px・淡い灰・下に2pxの線・✕） */
   body.phone .slip { background: #eceef1; }
@@ -766,10 +775,11 @@
     // 一度大きく測ると（隠れたタブで幅が狭いうちに測るなど）縮まなくなる
     const wrap = document.querySelector(".wrap");
     const content = wrap && wrap.offsetHeight ? wrap.offsetTop + wrap.offsetHeight : document.documentElement.scrollHeight;
-    const height = phone ? phoneFrameHeight() : content + 8;
+    const height = phone ? phoneFrameHeight(content) : content + 8;
     if (!heightChanged(height, lastHeight)) return;
     lastHeight = height;
     send("streamlit:setFrameHeight", { height: height });
+    trackViewport();
   }
 
   // 最初は隠れているタブ（PCのオッズ）の中で描かれると、高さを0のまま送ってしまう。
@@ -778,11 +788,60 @@
     if (window.innerWidth > 50) setHeight();      // 幅が無いうち（隠れている間）は測らない
   });
 
-  /** スマホで部品に使える高さ（画面の高さ − ヘッダー・タブバーなど）。 */
-  function phoneFrameHeight() {
+  /**
+   * スマホの部品の高さ = 中身の高さ（ただし、少ないときも下のバーとシートが画面の中に収まるよう、
+   * 最低でも「画面の高さ − ヘッダー・タブバー」）。中ではスクロールさせず、ページ全体で動かす。
+   */
+  function phoneFrameHeight(content) {
     let total = 700;
     try { total = window.parent.innerHeight || total; } catch (e) { /* 親が読めなければ控えの値 */ }
-    return Math.max(360, total - (payload.reservePx || 0));
+    const least = Math.max(360, total - Math.max(0, (payload.reservePx || 0) - 52));
+    return Math.max(least, Math.round((content || 0) + 96));
+  }
+
+  /**
+   * 下のバー・追加先のピル・買い目シート・暗幕を、**親ページの見えている範囲**に合わせて動かす。
+   * 部品の枠（iframe）は中身の高さまで伸びていて、画面は枠の一部しか映していないため、
+   * 枠の位置から「いま画面の下端はこの枠のどこか」を求めて CSS 変数に入れる。
+   * 親ページがスクロールするたびに呼ぶ（同じオリジンなので親のイベントを聞ける）。
+   */
+  let trackQueued = false;
+  function trackViewport() {
+    if (!phone || trackQueued) return;
+    trackQueued = true;
+    const run = function () {
+      trackQueued = false;
+      const root = document.documentElement;
+      if (!root || !root.style) return;
+      let top = 0, view = 700;
+      try {
+        const frame = window.frameElement, parentWin = window.parent;
+        if (frame && parentWin) {
+          top = -frame.getBoundingClientRect().top;
+          view = parentWin.innerHeight || view;
+        }
+      } catch (e) { /* 親が読めなければ、枠の上端を画面の上端として扱う */ }
+      const docH = root.clientHeight || window.innerHeight || view;
+      const visTop = Math.max(0, Math.min(top, docH - 100));
+      const visBottom = Math.max(visTop + 100, Math.min(top + view, docH));
+      root.style.setProperty("--vis-top", visTop + "px");
+      root.style.setProperty("--vis-h", (visBottom - visTop) + "px");
+      // バーの下端は、画面の下から56px上（右下の「Manage app」を避ける）。枠の下端を越えない
+      root.style.setProperty("--bar-b", Math.min(visBottom - 56, docH - 8) + "px");
+      root.style.setProperty("--slip-bottom", Math.max(0, docH - visBottom) + "px");
+    };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(run); else run();
+  }
+  let trackBound = false;
+  /** スマホになったとき1回だけ、親ページのスクロールと大きさの変化を聞き始める。 */
+  function bindViewportTracking() {
+    if (trackBound || !phone) return;
+    trackBound = true;
+    try {
+      window.parent.document.addEventListener("scroll", trackViewport, true);
+      window.parent.addEventListener("resize", trackViewport);
+    } catch (e) { /* 親が読めなければ、描き直すときだけ合わせる */ }
+    window.addEventListener("resize", trackViewport);
   }
 
   /** body の目印を付け外しする（テスト用の最小のDOMには body が無いので確かめてから）。 */
@@ -2153,6 +2212,7 @@
     // 進み具合（または失敗）が届いたら、押した直後の仮の 0% 表示はやめる
     if (next.progress) importing = false;
     phone = next.layout === "phone";
+    bindViewportTracking();
     bodyClass("phone", phone);
     // 買い目**以外**が前と同じか（金額を直しただけならここは変わらない）
     const sameDraw = !!next.drawVersion && next.drawVersion === appliedDraw;

@@ -269,7 +269,9 @@ def test_the_phone_bar_and_sheet_exist_in_the_component():
 
     source = (pathlib.Path(odds.__file__).parent / "odds_component" / "index.html").read_text()
     assert 'id: "phone-bar"' in source and "sheet-open" in source
-    assert "phoneFrameHeight()" in source.split("function setHeight()")[1].split("}")[0]
+    assert "phoneFrameHeight(content)" in source.split("function setHeight()")[1].split("}")[0]
+    # 中ではスクロールさせない（ページ全体で動かす）。バーとシートは見えている範囲に合わせて動かす
+    assert "function trackViewport()" in source and "overflow-y: auto; overflow-x: hidden" not in source
 
 
 def test_the_payload_carries_the_ids_for_jumping_to_the_grid():
