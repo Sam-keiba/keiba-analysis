@@ -58,8 +58,10 @@ def frames(entries: list[dict]) -> list[dict]:
     return out
 
 
-def horses(entries: list[dict], tansho: dict[str, list]) -> list[dict]:
-    """馬番ごとの 枠の色・馬名・単勝オッズ・人気。枠順確定前は空になる。"""
+def horses(
+    entries: list[dict], tansho: dict[str, list], marks: dict[str, str] | None = None,
+) -> list[dict]:
+    """馬番ごとの 枠の色・馬名・単勝オッズ・人気・予想印。枠順確定前は空になる。"""
     win = {combo: values[0] for combo, values in tansho.items()}
     ranks = popularity(win)
     out = []
@@ -75,6 +77,7 @@ def horses(entries: list[dict], tansho: dict[str, list]) -> list[dict]:
             "horse_id": entry.get("horse_id"),
             "bg": background, "fg": ink,
             "name": entry.get("horse_name") or "",
+            "mark": (marks or {}).get(entry.get("horse_id")) or "",
             "odds": win.get(combo),
             "pop": ranks.get(combo),
         })
@@ -114,7 +117,7 @@ def build_payload(
     focus: str | None = None, slip: list[dict] | None = None,
     slip_saved_at: str | None = None, read_only: bool = False,
     layout: str = "pc", reserve_px: int = 0, race_id: str | None = None,
-    progress: dict | None = None,
+    progress: dict | None = None, marks: dict[str, str] | None = None,
 ) -> dict:
     """オッズのコンポーネントに渡す中身をまとめる。
 
@@ -150,7 +153,7 @@ def build_payload(
     payload = {
         "betTypes": bet_types,
         "tabs": tabs(updates),
-        "horses": horses(entries, by_bet.get("tansho", {})),
+        "horses": horses(entries, by_bet.get("tansho", {}), marks),
         "frames": frames(entries),
         "focus": focus,
         # クラウド版では取り込みができないので、更新マーク（↻）を出さない

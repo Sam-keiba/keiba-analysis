@@ -138,6 +138,8 @@
   table.single td.name { text-align: left; }
   table.single tbody tr:nth-child(even) { background: var(--zebra); }
   table.single td.tick { text-align: center; width: 34px; }
+  table.single td.mk { text-align: center; font-weight: 700; color: #3b4552; white-space: nowrap; }
+  table.single td.mk:not(.on) { color: #9aa4b0; font-weight: 400; }
   .acts-line { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
 
   /* --- 買い方（通常／フォーメーション・ながし・ボックス） --- */
@@ -1638,7 +1640,7 @@
     const bets = t.bets.map(bet).filter(function (b) { return !!b; });
     const set = singlePicks;
     // スマホは資料どおり6列（人気は馬名の下に小さく。見出しは「番」）
-    const head = el("tr", {}, [el("th", { text: "" }), el("th", { text: "枠" }), el("th", { text: phone ? "番" : "馬番" }), el("th", { text: "馬名" })]);
+    const head = el("tr", {}, [el("th", { text: "" }), el("th", { text: phone ? "番" : "馬番" }), el("th", { text: "印" }), el("th", { text: "馬名" })]);
     bets.forEach(function (b) { head.appendChild(el("th", { text: b.label })); });
     if (!phone) head.appendChild(el("th", { text: "人気" }));
 
@@ -1650,13 +1652,9 @@
       box.addEventListener("change", function () { set[horse.number] = box.checked; updatePhoneAdd(); });
       const row = el("tr", { title: "行を押すと選べます" }, [
         el("td", { class: "tick" }, [box]),
-        el("td", { class: "p", style: "text-align:center" }, [
-          el("span", {
-            class: "num", text: String(horse.waku == null ? "" : horse.waku),
-            style: "background:" + horse.bg + ";color:" + horse.fg,
-          }),
-        ]),
-        el("td", { style: "text-align:center" }, [phone ? el("b", { text: String(horse.number) }) : numberChip(horse)]),
+        // 馬番は枠色のチップ（枠番の列は出さない）。その右に予想印
+        el("td", { class: "p", style: "text-align:center" }, [numberChip(horse)]),
+        el("td", { class: "mk" + (horse.mark ? " on" : ""), text: horse.mark || "--" }),
         el("td", { class: "name" }, phone ? [
           el("div", { class: "nm", text: horse.name }),
           el("div", { class: "pop", "data-rank": horse.pop || null, text: horse.pop ? String(horse.pop) + "人気" : DASH }),
