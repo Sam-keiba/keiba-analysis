@@ -796,7 +796,7 @@
     let total = 700;
     try { total = window.parent.innerHeight || total; } catch (e) { /* 親が読めなければ控えの値 */ }
     const least = Math.max(360, total - Math.max(0, (payload.reservePx || 0) - 52));
-    return Math.max(least, Math.round((content || 0) + 96));
+    return Math.max(least, Math.round((content || 0) + 150));   // 一番下でも最後の行がバーに隠れない余白
   }
 
   /**
@@ -826,8 +826,8 @@
       const visBottom = Math.max(visTop + 100, Math.min(top + view, docH));
       root.style.setProperty("--vis-top", visTop + "px");
       root.style.setProperty("--vis-h", (visBottom - visTop) + "px");
-      // バーの下端は、画面の下から56px上（右下の「Manage app」を避ける）。枠の下端を越えない
-      root.style.setProperty("--bar-b", Math.min(visBottom - 56, docH - 8) + "px");
+      // バーの下端は、画面の下から40px上（右下の「Manage app」を避ける）。枠の下端を越えない
+      root.style.setProperty("--bar-b", Math.min(visBottom - 40, docH - 8) + "px");
       root.style.setProperty("--slip-bottom", Math.max(0, docH - visBottom) + "px");
     };
     if (window.requestAnimationFrame) window.requestAnimationFrame(run); else run();
