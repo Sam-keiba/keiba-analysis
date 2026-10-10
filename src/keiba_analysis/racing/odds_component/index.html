@@ -199,6 +199,8 @@
     flex: 1 1 auto; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .slot label .mk, table.poprank .pr-in .mk { min-width: 1.6em; text-align: center; font-size: 14px; font-weight: 700; color: #3b4552; }
+  .slot label .mk:not(.on), table.poprank .pr-in .mk:not(.on) { color: #9aa4b0; font-weight: 400; }
   .slot label .o { margin-left: auto; padding-left: 8px; color: var(--muted); font-size: 12px; }
 
   /* --- 点数と並べ替え --- */
@@ -1351,6 +1353,10 @@
       style: "background:" + item.bg + ";color:" + item.fg,
     });
   }
+  /** 予想印（付いていなければ薄い「--」）。馬番と馬名の間に置く。 */
+  function markCell(item) {
+    return el("span", { class: "mk" + (item.mark ? " on" : ""), text: item.mark || "--" });
+  }
   function itemsOf(b) {
     return b && b.byFrame ? payload.frames : payload.horses;
   }
@@ -1726,6 +1732,8 @@
       boxes.push({ number: item.number, box: box });
       box.addEventListener("change", function () { toggle(item.number, box.checked); });
       const label = el("label", {}, [box, numberChip(item)]);
+      // 馬番と馬名の間に予想印（枠連の枠には印が無い）
+      if (!b.byFrame) label.appendChild(markCell(item));
       label.appendChild(el("span", { class: "nm", text: item.name }));
       if (!b.byFrame && item.odds != null) {
         label.appendChild(el("span", { class: "o" + hot(item.odds), text: item.odds.toFixed(1) }));
@@ -1927,6 +1935,7 @@
     return combo.split("-").map(function (text) {
       const item = byNumber[Number(text)] || { number: Number(text), bg: "#e8ecf0", fg: "#6f7c8b" };
       const parts = [numberChip(item)];
+      if (!b.byFrame && item.name) parts.push(markCell(item));
       if (item.name) parts.push(el("span", { class: "nm", text: Array.from(item.name).slice(0, 2).join("") }));
       return el("td", { class: "pr-h" }, [el("span", { class: "pr-in" }, parts)]);
     });
