@@ -594,6 +594,10 @@
   /* 取り込みボタンの ↻／✓ は別の span（資料: 17px） */
   .import-pill .ic { font-size: 17px; line-height: 1; }
   .import-pill .ic:empty { display: none; }
+  /* 更新中（running）は ↻ をくるくる回す */
+  .import-pill .ic { display: inline-block; }
+  .import-pill.running .ic { animation: import-spin .9s linear infinite; }
+  @keyframes import-spin { to { transform: rotate(360deg); } }
   /* PC・スマホとも: 36pxの丸い ↻ だけ（文字は出さない） */
   .import-pill.round {
     width: 36px; height: 36px; padding: 0; justify-content: center; box-shadow: none; flex: none;
@@ -1608,6 +1612,7 @@
       refresh.addEventListener("click", function () {
         if (!wanted.length) return;
         refresh.setAttribute("disabled", "disabled");
+        refresh.setAttribute("class", "import-pill running round slip-refresh");   // 更新中は回す
         requestFetchMany(wanted);
       });
     }
@@ -1721,7 +1726,8 @@
       if (running) return;
       importing = true;
       button.setAttribute("disabled", "disabled");
-      button.textContent = "↻";
+      // 押した直後から、更新マークをくるくる回す（進み具合が届いたあとも running で回り続ける）
+      button.setAttribute("class", "import-pill running round");
       requestFetchMany([active]);
     });
     return button;
