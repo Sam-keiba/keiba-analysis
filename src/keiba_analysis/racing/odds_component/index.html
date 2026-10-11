@@ -646,16 +646,21 @@
      位置は JS が親ページの画面（見えている範囲）に合わせて --bar-b などに入れる */
   body.phone #phone-bar { position: absolute; bottom: auto; top: calc(var(--bar-b, 640px) - 58px); }
   body.phone #phone-bar-choice { position: absolute; bottom: auto; top: calc(var(--bar-b, 640px) - 112px); }
+  /* 高さは見えている範囲の85%まで。ただし上に200pxは残す: ヘッダーとタブバー（約170px）の下に隠れない
+     暗幕の帯が残り、そこを押して閉じられる（以前は帯がヘッダーの裏に入り、閉じる手段が見出しの ✕ だけだった） */
   body.phone .slip {
-    position: absolute; bottom: var(--slip-bottom, 0px); max-height: calc(var(--vis-h, 600px) * .85);
+    position: absolute; bottom: var(--slip-bottom, 0px);
+    max-height: min(calc(var(--vis-h, 600px) * .85), calc(var(--vis-h, 600px) - 200px));
   }
   body.phone:not(.sheet-open) .slip { visibility: hidden; }
   #sheet-backdrop { position: absolute; inset: auto; left: 0; right: 0; top: var(--vis-top, 0px); height: var(--vis-h, 100%); }
 
   /* スマホの買い目シート（資料: 見出し56px・淡い灰・下に2pxの線・✕） */
   body.phone .slip { background: #eceef1; }
-  body.phone .slip-box { background: transparent; box-shadow: none; border-radius: 0 !important; }
+  /* overflow は visible: hidden のままだと、見出しの position: sticky が効かない（スクロールの箱になるため） */
+  body.phone .slip-box { background: transparent; box-shadow: none; border-radius: 0 !important; overflow: visible; }
   body.phone .slip-box > h3 {
+    position: sticky; top: 0; z-index: 3;      /* 長い買い目を送っても ✕ が見える */
     height: 56px; box-sizing: border-box; padding: 0 12px; background: #f4f6f8; border-bottom: 1px solid #d5dbe2;
     justify-content: flex-start; font-size: 20px;
   }
