@@ -863,7 +863,10 @@
     let total = 700;
     try { total = window.parent.innerHeight || total; } catch (e) { /* 親が読めなければ控えの値 */ }
     const least = Math.max(360, total - Math.max(0, (payload.reservePx || 0) - 52));
-    return Math.max(least, Math.round((content || 0) + 150));   // 一番下でも最後の行がバーに隠れない余白
+    // 一番下でも最後の行がバーに隠れない余白。馬選択（一覧が画面の残りいっぱいまである）では、
+    // 一番下までスクロールしても一覧の下に余白が残らないよう、バーの高さぶんだけにする
+    const room = document.querySelector && document.querySelector(".mx") ? 76 : 150;
+    return Math.max(least, Math.round((content || 0) + room));
   }
 
   /**
