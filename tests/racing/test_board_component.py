@@ -414,3 +414,17 @@ parentClick({ target: linkTo("202606040612", "h1"), preventDefault: function () 
 var answer = { tab: !!tab.clicked, flash: cls(keito).indexOf("flash") >= 0 };
 """, tmp_path)
     assert answer == {"tab": False, "flash": False}
+
+
+@needs_jsc
+def test_coming_back_from_a_detail_flashes_that_horse(script, tmp_path):
+    """馬の詳細の馬名から戻ってきた（payload.focus）とき、盤のその馬を光らせる（その位置へ画面も送る）。"""
+    payload = _payload(layout="phone")
+    payload["focus"] = "h3"
+    answer = run_board(script, """
+render(PAYLOAD);
+function cls(node) { return node.attrs["class"] || ""; }
+var answer = { target: cls(chipOf("アドマイヤテラ")).indexOf("flash") >= 0,
+               other: cls(chipOf("ロブチェン")).indexOf("flash") >= 0 };
+""", tmp_path, payload)
+    assert answer == {"target": True, "other": False}

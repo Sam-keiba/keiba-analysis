@@ -418,6 +418,39 @@
   }
 
   /**
+   * 馬の詳細の馬名から戻ってきたとき（payload.focus）、盤のその馬の位置まで画面を送って光らせる。
+   * 盤の枠（iframe）は中身の高さまで伸びていて、親のページがスクロールするので、
+   * 親のスクロールの箱（stMain）をその馬が見えるところまで動かす。高さが決まるのを待って2回送る。
+   */
+  let pendingFocus = null;
+  let appliedFocus = null;
+  function showFocused() {
+    if (!pendingFocus) return;
+    const marker = markers.filter(function (m) { return m.horse_id === pendingFocus; })[0];
+    if (!marker || !marker.el) return;
+    appliedFocus = pendingFocus;
+    pendingFocus = null;
+    const go = function () {
+      try {
+        const win = window.parent, doc = win.document, frame = window.frameElement;
+        const main = doc.querySelector('[data-testid="stMain"]');
+        const mine = marker.el.getBoundingClientRect();
+        const box = frame.getBoundingClientRect();
+        // 画面の見えている範囲（上のヘッダーとタブバー約190pxの下）の真ん中に置く
+        const delta = box.top + mine.top + mine.height / 2 - (190 + (win.innerHeight - 190) / 2);
+        if (main && main.scrollHeight > main.clientHeight) main.scrollTop += delta;
+        else win.scrollBy(0, delta);
+      } catch (e) {
+        if (marker.el.scrollIntoView) marker.el.scrollIntoView({ block: "center" });
+      }
+    };
+    setTimeout(go, 250);
+    setTimeout(go, 900);
+    marker.el.classList.add("flash");
+    setTimeout(function () { marker.el.classList.remove("flash"); }, 2400);
+  }
+
+  /**
    * 馬柱の**枠**（`.board-link`）を押したら、予想のタブを開いてその馬を光らせる（jumpToGrid の逆向き）。
    * `data-race` が盤のレースIDと違うときは何もしない。描き直すたびに受け口を付け直す。
    */
@@ -463,6 +496,7 @@
     const payload = (event.data.args || {}).payload || {};
     raceId = payload.race_id || raceId;
     installBoardLinks();
+    if (payload.focus && payload.focus !== appliedFocus) pendingFocus = payload.focus;
     // 古い番号の描画は捨てる（順番が入れ替わって届くことがあるため。高さを送るたびに同じ中身も返ってくる）
     if (payload.rev != null && payload.rev <= appliedRev) return;
     if (payload.rev != null) appliedRev = payload.rev;
@@ -472,6 +506,7 @@
       pendingSave = false;
       appliedVersion = payload.version || null;
       setHeight();
+      showFocused();
       return;
     }
     // ドラッグの最中は描き直さない（持っている馬の要素が消えて、離しても動かなくなる）
@@ -489,6 +524,7 @@
     bodyClass("phone", phone);
     markers = (payload.markers || []).map(function (m) { return Object.assign({}, m); });
     draw();
+    showFocused();
   });
 
   // 最初は隠れているタブ（PCの予想）の中で描かれると、高さを0のまま送ってしまう。
