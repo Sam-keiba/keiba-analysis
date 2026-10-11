@@ -54,6 +54,14 @@ def test_the_race_name_can_be_wrapped_in_the_jra_race_link():
     html = jra_race_name_link(row, "府中牝馬S")
     assert html.startswith('<a class="jra-race-link"') and html.endswith("府中牝馬S</a>")
     assert 'target="_blank"' in html and 'rel="noopener"' in html
-    # トークンが無いレースは、リンクにせず文字のまま
+    # トークンも race_id も無いレースは、リンクにせず文字のまま
     assert jra_race_url({}) is None
     assert jra_race_name_link({}, "府中牝馬S") == "府中牝馬S"
+
+
+def test_a_race_without_the_jra_token_links_to_netkeiba():
+    from keiba_analysis.racing.past_runs import jra_race_name_link
+
+    html = jra_race_name_link({"race_id": "202609040705"}, "2歳新馬")
+    assert 'href="https://db.netkeiba.com/race/202609040705/"' in html
+    assert html.endswith("2歳新馬</a>")

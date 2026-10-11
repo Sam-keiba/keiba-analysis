@@ -50,14 +50,22 @@ def jra_race_url(row: dict) -> str | None:
 def jra_race_name_link(row: dict, label_html: str, css_class: str = "jra-race-link") -> str:
     """レース名（`label_html`。エスケープ済みのHTML）をJRA公式のレース結果ページへのリンクにする。
 
-    リンクのトークンが無いレースは、リンクにせず `label_html` をそのまま返す。
+    リンクのトークンが無いレースは、netkeibaのレース結果ページへのリンクにする
+    （`race_id` も無いときだけ、リンクにせず `label_html` をそのまま返す）。
     """
     href = jra_race_url(row)
-    if not href:
+    if href:
+        return (
+            f'<a class="{css_class}" href="{escape(href)}" target="_blank" rel="noopener" '
+            f'title="{JRA_LINK_TITLE}">{label_html}</a>'
+        )
+    race_id = row.get("race_id")
+    if not race_id:
         return label_html
+    fallback = config.RACE_RESULT_URL.format(race_id=quote(str(race_id), safe=""))
     return (
-        f'<a class="{css_class}" href="{escape(href)}" target="_blank" rel="noopener" '
-        f'title="{JRA_LINK_TITLE}">{label_html}</a>'
+        f'<a class="{css_class}" href="{escape(fallback)}" target="_blank" rel="noopener" '
+        f'title="netkeibaのレース結果ページ">{label_html}</a>'
     )
 
 # クラスの短縮表記（表記ゆれは NFKC で正規化してから引く）。
