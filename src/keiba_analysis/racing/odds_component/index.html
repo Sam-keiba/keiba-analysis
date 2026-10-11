@@ -685,6 +685,51 @@
     box-shadow: none;
   }
 
+  /* --- スマホの馬選択（フォーメーション・ながし・BOX）: 馬の一覧は1つ、右に選択列（資料 umaren-input-1a） --- */
+  body.phone .modes { gap: 6px; margin: 0 0 8px; }
+  body.phone .modes .mini {
+    padding: 9px 12px; font-size: 12px; font-weight: 700; border-radius: 6px !important;
+    background: #fbfbfc; color: var(--ink); border: 1px solid #b4bdc8;
+  }
+  body.phone .modes .mini[aria-pressed="true"] { background: #fff; border-color: #3b4552; color: var(--ink); }
+  body.phone .form-wrap.mx-wrap { padding: 0; overflow: hidden; border-radius: 6px !important; }
+  body.phone .mx-wrap .opts { margin: 0; padding: 8px 12px; border-bottom: 1px solid #d5dbe2; }
+  .mx { display: flex; flex-direction: column; }
+  .mx-head {
+    display: grid; grid-template-columns: var(--mx-cols); background: #e8ecf0;
+    border-top: 1px solid #d5dbe2; border-bottom: 1px solid #d5dbe2;
+  }
+  .mx-hint { padding: 8px 12px; display: flex; flex-direction: column; justify-content: flex-end; font-size: 11px; color: #6f7c8b; }
+  .mx-hint b { font-size: 13px; color: var(--ink); }
+  .mx-col { padding: 8px 4px; text-align: center; border-left: 1px solid #d5dbe2; }
+  .mx-col .ttl { font-size: 13px; font-weight: 700; }
+  .mx-col .cnt { font-size: 10px; color: #6f7c8b; }
+  .mx-col .acts { display: flex; gap: 4px; justify-content: center; margin-top: 4px; }
+  .mx-act {
+    appearance: none; font: inherit; font-size: 10px; font-weight: 700; background: #fbfbfc; color: var(--ink);
+    border: 1px solid #b4bdc8; border-radius: 4px; padding: 3px 6px; min-height: 0;
+  }
+  /* 一覧だけがスクロールする（見出しと下のバーは動かない）。上のタブ・見出し・下のバー分を引いた高さ */
+  .mx-list { overflow-y: auto; -webkit-overflow-scrolling: touch; background: #fbfbfc;
+             max-height: max(270px, calc(var(--vis-h, 600px) - 330px)); }
+  .mx-row { display: grid; grid-template-columns: var(--mx-cols); height: 54px; align-items: center; border-bottom: 1px solid #e8ecf0; }
+  .mx-row.on { background: #f4f6f8; }
+  .mx-horse { display: flex; align-items: center; gap: 8px; padding-left: 12px; min-width: 0; }
+  .mx-horse .num { flex: none; width: 28px; height: 28px; border-radius: 4px !important; border: 1px solid #b4bdc8;
+                   display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+  .mx-horse .mk { flex: none; min-width: 1.4em; text-align: center; font-size: 13px; font-weight: 700; color: #3b4552; }
+  .mx-horse .mk:not(.on) { color: #9aa4b0; font-weight: 400; }
+  .mx-horse .nm { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mx-cell {
+    appearance: none; border: none; border-left: 1px solid #e8ecf0; border-radius: 0; background: transparent;
+    height: 54px; padding: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .mx-cell .tick {
+    width: 26px; height: 26px; border-radius: 6px; border: 1.5px solid #6f7c8b; background: #fff; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;
+  }
+  .mx-cell[aria-pressed="true"] .tick { background: #3b4552; border-color: #3b4552; }
+
   /* 馬名を押すと馬柱のその馬へ（馬柱の馬名リンクと同じ緑の下線） */
   .horse-jump {
     cursor: pointer; text-decoration: underline; text-decoration-thickness: 2px;
@@ -1774,6 +1819,120 @@
     return { node: node, sync: sync };
   }
 
+  /** 馬の集合（`{番号: true}`）1つぶんの選択列。全・消つき。 */
+  function setColumn(head, set, items) {
+    return {
+      head: head,
+      count: function () { return chosenIn(set).length; },
+      isOn: function (n) { return !!set[n]; },
+      toggle: function (n, on) { set[n] = on; },
+      all: function () { items.forEach(function (item) { set[item.number] = true; }); },
+      clear: function () { Object.keys(set).forEach(function (n) { delete set[n]; }); },
+    };
+  }
+
+  /** スマホの馬選択の列（買い方ごと）。選択の持ち方は drawSlots / drawNagashi / drawBox と同じ。 */
+  function matrixColumns(b) {
+    const items = itemsOf(b);
+    if (mode === "box") return [setColumn("BOX", boxOf(b.key), items)];
+    if (mode === "nagashi") {
+      const state = nagashiOf(b.key);
+      const axis = {
+        head: state.unit === 2 ? "軸(2頭)" : "軸",
+        count: function () { return state.axes.length; },
+        isOn: function (n) { return state.axes.indexOf(n) >= 0; },
+        toggle: function (n, on) {
+          const at = state.axes.indexOf(n);
+          if (on && at < 0) state.axes.push(n);
+          if (!on && at >= 0) state.axes.splice(at, 1);
+          // 上限を超えたら、古いほうから外す（いま押した馬は必ず残す）
+          while (state.axes.length > state.unit) state.axes.shift();
+        },
+        all: null,      // 軸は頭数が決まっているので「全」は無い
+        clear: function () { state.axes.length = 0; },
+      };
+      return [axis, setColumn("相手", state.partners, items)];
+    }
+    const heads = b.byFrame ? FRAME_HEADS : (b.ordered ? ORDERED_HEADS : UNORDERED_HEADS);
+    return slotsOf(b.key, b.legs).map(function (set, i) { return setColumn(heads[i], set, items); });
+  }
+
+  /**
+   * スマホの馬選択（フォーメーション・ながし・BOX）。馬の一覧は1つだけ出し、右に選択列を並べる。
+   * 1頭目と2頭目を同じ画面で選べる（以前は列ごとに一覧が積まれ、下までスクロールが要った）。
+   * 見出しは固定で、一覧だけが中でスクロールする。`total(n)` で左上の「N点／◯円」を合わせる。
+   */
+  function drawMatrix(b, onChange) {
+    const items = itemsOf(b);
+    const columns = matrixColumns(b);
+    const width = columns.length === 1 ? "90px" : "78px";
+    const template = "1fr" + columns.map(function () { return " " + width; }).join("");
+
+    const points = el("span", { class: "pts", text: "0点" });
+    const yen = el("b", { text: yenText(0) });
+    const head = el("div", { class: "mx-head" }, [el("div", { class: "mx-hint" }, [points, yen])]);
+    const counts = [];
+    columns.forEach(function (col) {
+      const count = el("div", { class: "cnt", text: "0頭" });
+      counts.push(count);
+      const acts = el("div", { class: "acts" });
+      const act = function (text, run) {
+        const button = el("button", { class: "mx-act", type: "button", text: text });
+        button.addEventListener("click", function () { run(); sync(); onChange(); });
+        acts.appendChild(button);
+      };
+      if (col.all) act("全", col.all);
+      act("消", col.clear);
+      head.appendChild(el("div", { class: "mx-col" }, [el("div", { class: "ttl", text: col.head }), count, acts]));
+    });
+
+    const rows = items.map(function (item) {
+      const cells = columns.map(function (col) {
+        const cell = el("button", { class: "mx-cell", type: "button", "aria-pressed": "false", "aria-label": col.head });
+        const tick = el("span", { class: "tick" });
+        cell.appendChild(tick);
+        cell.tick = tick;
+        cell.addEventListener("click", function () {
+          col.toggle(item.number, !col.isOn(item.number));
+          sync();
+          onChange();
+        });
+        return cell;
+      });
+      const label = el("div", { class: "mx-horse" }, [numberChip(item)]);
+      if (!b.byFrame) label.appendChild(markCell(item));
+      label.appendChild(el("span", { class: "nm", text: item.name }));
+      const row = el("div", { class: "mx-row" }, [label].concat(cells));
+      return { number: item.number, row: row, cells: cells };
+    });
+
+    /** 四角と、選んである行の地色、頭数を中身に合わせ直す（軸の入れ替わりなど、押した所以外も変わる）。 */
+    function sync() {
+      rows.forEach(function (r) {
+        let any = false;
+        columns.forEach(function (col, i) {
+          const on = col.isOn(r.number);
+          any = any || on;
+          r.cells[i].setAttribute("aria-pressed", on ? "true" : "false");
+          r.cells[i].tick.textContent = on ? "✓" : "";
+        });
+        r.row.setAttribute("class", "mx-row" + (any ? " on" : ""));
+      });
+      columns.forEach(function (col, i) { counts[i].textContent = col.count() + "頭"; });
+    }
+    sync();
+
+    const list = el("div", { class: "mx-list" }, rows.map(function (r) { return r.row; }));
+    const node = el("div", { class: "mx", style: "--mx-cols:" + template }, [head, list]);
+    return {
+      node: node,
+      total: function (n) {
+        points.textContent = n + "点";
+        yen.textContent = yenText(n * DEFAULT_AMOUNT);
+      },
+    };
+  }
+
   /** フォーメーション: 列ごとに馬を選ぶ（今までの画面）。 */
   function drawSlots(b, onChange) {
     const heads = b.byFrame ? FRAME_HEADS : (b.ordered ? ORDERED_HEADS : UNORDERED_HEADS);
@@ -2103,7 +2262,11 @@
     panel.appendChild(modeBar);
 
     // 馬選択
-    const form = el("div", { class: "form-wrap" });
+    // スマホの3方式（フォーメーション・ながし・BOX）は、馬の一覧を1つにして選択列を並べる（drawMatrix）。
+    // 組み合わせの表と並べ替えは出さず、できた組み合わせは全部が買い目に入る
+    const matrix = phone && mode !== "popular";
+    let matrixView = null;
+    const form = el("div", { class: "form-wrap" + (matrix ? " mx-wrap" : "") });
     const resultHead = el("div", { class: "result-head" });
     const countBox = el("span", { class: "count" });
     const combosBox = el("div", {});
@@ -2132,6 +2295,7 @@
       add.textContent = "買い目へ追加" + (picked.length ? "（" + picked.length + "点）" : "");
       if (picked.length) add.removeAttribute("disabled");
       else add.setAttribute("disabled", "disabled");
+      if (matrixView) matrixView.total(picked.length);
       phoneCombo = { count: picked.length, run: function () { add.click(); } };
       updatePhoneAdd();
     }
@@ -2165,6 +2329,12 @@
       countBox.appendChild(document.createTextNode("点"));
       combosBox.textContent = "";
       const popular = mode === "popular";
+      if (matrix) {            // 表は出さない（数千点になる3連単でも重くならない）
+        table = { node: combosBox, sync: function () {} };
+        countPicked();
+        setHeight();
+        return;
+      }
       table = drawCombos(b, current, {
         isOn: function (combo) {
           return popular ? !!(popPicked[b.key] || {})[combo] : !(dropped[b.key] || {})[combo];
@@ -2186,6 +2356,12 @@
     }
 
     if (mode === "popular") { /* 馬は選ばない（下の人気順の一覧から選ぶ） */ }
+    else if (matrix) {
+      // 軸の頭数・着順・マルチの段は、3頭の券種と順序のある券種だけ（馬連などは空になるので出さない）
+      if (mode === "nagashi" && (b.legs === 3 || b.ordered)) form.appendChild(nagashiOptions(b, nagashiOf(b.key)));
+      matrixView = drawMatrix(b, refresh);
+      form.appendChild(matrixView.node);
+    }
     else if (mode === "box") form.appendChild(drawBox(b, refresh));
     else if (mode === "nagashi") form.appendChild(drawNagashi(b, refresh));
     else form.appendChild(drawSlots(b, refresh));
@@ -2206,7 +2382,7 @@
     resultHead.appendChild(countBox);
     if (mode !== "popular") resultHead.appendChild(sortWrap);   // 人気順はオッズの低い順で固定
     resultHead.appendChild(add);
-    panel.appendChild(resultHead);
+    if (!matrix) panel.appendChild(resultHead);
 
     // 1点ずつ選ぶ（全選択・全解除）
     pickLine.appendChild(pickCount);
@@ -2224,8 +2400,10 @@
       });
       pickLine.appendChild(button);
     });
-    panel.appendChild(pickLine);
-    panel.appendChild(combosBox);
+    if (!matrix) {
+      panel.appendChild(pickLine);
+      panel.appendChild(combosBox);
+    }
 
     // 「オッズの低い順」の表・軸ごとのオッズ表は出さない（不要。人気順の一覧がその役目）
     refresh();

@@ -1462,10 +1462,10 @@ def test_phone_bar_adds_the_picked_combinations(script, tmp_path):
 NODES.tabs.children[2].click();                       // 馬連のタブ
 press(NODES.panel.byClass("modes")[0], "フォーメーション");   // 最初は人気順なので、フォーメーションへ
 var empty = bar().text();
-var columns = NODES.panel.byClass("slot");
-columns[0].findAll(function (c) { return c.tagName === "input"; })[0].click();
-var second = columns[1].findAll(function (c) { return c.tagName === "input"; });
-second[1].click(); second[2].click();
+var rows = NODES.panel.byClass("mx-row");             // スマホは馬の一覧が1つ。右に選択列（1頭目・2頭目）
+function cell(row, col) { return rows[row].byClass("mx-cell")[col]; }
+cell(0, 0).click();                                    // 1頭目: 1番
+cell(1, 1).click(); cell(2, 1).click();                // 2頭目: 2番・3番
 var picked = bar().text();
 bar().click();
 var answer = { empty: empty, picked: picked, bets: slipBets(), points: NODES.slip.byClass("pts").map(function (p) { return p.text(); }) };
@@ -1607,3 +1607,31 @@ var answer = { heads: heads, cells: row.byClass("pr-h").length,
     assert answer["heads"] == ["選択", "人気", "1頭目", "2頭目", "オッズ"]
     assert answer["cells"] == 2
     assert all(n <= 2 for n in answer["names"])
+
+
+@needs_jsc
+def test_phone_matrix_selects_both_columns_on_one_screen(script, tmp_path):
+    """スマホのフォーメーション/BOX: 一覧は1つで、列ごとの全・消と点数が合う。方式を替えても選択は残る。"""
+    answer = run_component(script, PHONE + """
+NODES.tabs.children[2].click();                       // 馬連
+press(NODES.panel.byClass("modes")[0], "フォーメーション");
+var lists = NODES.panel.byClass("mx-list").length;
+var rows = function () { return NODES.panel.byClass("mx-row"); };
+var cell = function (r, c) { return rows()[r].byClass("mx-cell")[c]; };
+var all = function (c) { return NODES.panel.byClass("mx-col")[c].byClass("mx-act")[0]; };
+cell(0, 0).click(); all(1).click();                    // 1頭目=1番、2頭目=全頭
+var form = bar().text();
+press(NODES.panel.byClass("modes")[0], "BOX");
+var boxEmpty = bar().text();
+cell(0, 0).click(); cell(1, 0).click(); cell(2, 0).click();   // BOX: 1・2・3番 → 3点
+var box = bar().text();
+press(NODES.panel.byClass("modes")[0], "フォーメーション");
+var back = bar().text();                               // 方式を戻すと選択が残っている
+var answer = { lists: lists, form: form, boxEmpty: boxEmpty, box: box, back: back,
+               tables: NODES.panel.byClass("combos").length };
+""", tmp_path)
+    assert answer["lists"] == 1
+    assert answer["boxEmpty"] == "買い目へ追加(0点)"
+    assert answer["box"] == "買い目へ追加(3点)"
+    assert answer["back"] == answer["form"]
+    assert answer["tables"] == 0                       # 組み合わせの表は出さない
