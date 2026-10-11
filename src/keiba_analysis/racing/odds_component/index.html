@@ -594,9 +594,13 @@
   /* 取り込みボタンの ↻／✓ は別の span（資料: 17px） */
   .import-pill .ic { font-size: 17px; line-height: 1; }
   .import-pill .ic:empty { display: none; }
-  /* 更新中（running）は ↻ をくるくる回す */
-  .import-pill .ic { display: inline-block; }
-  .import-pill.running .ic { animation: import-spin .9s linear infinite; }
+  /* 更新中（running）は ↻ の文字をやめて、中心に揃った細い輪（スピナー）にする。
+     文字を回すと字の重心がずれて、ふらついて見えた */
+  .import-pill.running .ic, .import-pill.running.round .ic {
+    display: block; box-sizing: border-box; width: 16px; height: 16px; font-size: 0; line-height: 0; color: transparent;
+    border: 2px solid #b4bdc8; border-top-color: #3b4552; border-radius: 50% !important;
+    animation: import-spin .8s linear infinite;
+  }
   @keyframes import-spin { to { transform: rotate(360deg); } }
   /* PC・スマホとも: 36pxの丸い ↻ だけ（文字は出さない） */
   .import-pill.round {
