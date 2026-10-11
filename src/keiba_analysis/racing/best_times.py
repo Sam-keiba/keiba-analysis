@@ -18,6 +18,7 @@ netkeibaの持ちタイムランキングと同じ考え方で、**その条件�
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from html import escape
 
 from keiba_analysis.racing.past_runs import SURFACE_SHORT, pace_mark
@@ -140,13 +141,21 @@ def _row_title(row: dict) -> str:
     return escape(f"{date} {row.get('venue_name') or ''}".strip())
 
 
-def render_best_times(entries: list[dict], rows: list[dict], surface: str | None = None) -> str:
+def render_best_times(
+    entries: list[dict],
+    rows: list[dict],
+    surface: str | None = None,
+    horse_href: Callable[[dict], str | None] | None = None,
+) -> str:
     """持ちタイムの表。記録がある馬だけを速い順に並べる。
 
     列は 馬名・着順・タイム・前後3F・ペース・脚質・上り・開催・馬場・硬さ（馬番の列は無い）。
     着順を前に置くのは「何着のときの時計か」を先に見たいから。
     **開催と馬場と硬さは別々のマス**にする（まとめると見比べにくいため）。
     `surface` は硬さの列の見出しを決めるのに使う（タブが馬場ごとなので混ざらない）。
+
+    `horse_href` を渡すと、馬名を出走表と同じ馬の詳細（馬柱）へのリンクにする
+    （出走馬（entry）を受けて URL を返す。None を返した馬は素のテキスト）。
 
     記録が無い馬は表に出さず、呼び出し側が `horses_without_record()` で名前を出す。
     """
@@ -167,12 +176,17 @@ def render_best_times(entries: list[dict], rows: list[dict], surface: str | None
     for row in rows:
         entry = by_horse.get(row.get("horse_id")) or {}
         name = escape(entry.get("horse_name") or DASH)
+        href = horse_href(entry) if horse_href and entry else None
+        name_html = (
+            f"<a class='horse-link' href='{escape(href, quote=True)}' target='_self'>{name}</a>"
+            if href else name
+        )
         # 上りは**その馬自身**の値。小数1桁にそろえる（生の値だと 33.599999… と出る）
         last_3f = row.get("last_3f")
         last_3f_text = DASH if last_3f is None else f"{float(last_3f):.1f}"
         lines.append(
             f"<tr title='{_row_title(row)}'>"
-            f"<td class='bt-name'><div title='{name}'>{name}</div></td>"
+            f"<td class='bt-name'><div title='{name}'>{name_html}</div></td>"
             f"<td class='bt-finish'>{_finish_cell(row)}</td>"
             f"<td class='bt-time'>{escape(format_race_time(row.get('time_sec')))}</td>"
             f"<td class='bt-split'>{escape(splits_label(row))}</td>"

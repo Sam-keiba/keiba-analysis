@@ -271,3 +271,10 @@ def test_cards_follow_the_surface_for_the_hardness():
     assert "ク" in render_best_time_cards(ENTRIES, ROWS, "turf")
     assert "含水" in render_best_time_cards(ENTRIES, ROWS, "dirt")
     assert render_best_time_cards(ENTRIES, []) == ""
+
+
+def test_horse_names_link_to_the_horse_page_when_a_href_is_given():
+    html = render_best_times(ENTRIES, ROWS, horse_href=lambda e: f"?horse={e['horse_id']}&a=1")
+    assert "<a class='horse-link' href='?horse=" in html and "&amp;a=1" in html
+    # 渡さなければ今までどおり素のテキスト
+    assert "horse-link" not in render_best_times(ENTRIES, ROWS)
