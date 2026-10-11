@@ -709,9 +709,10 @@
     appearance: none; font: inherit; font-size: 10px; font-weight: 700; background: #fbfbfc; color: var(--ink);
     border: 1px solid #b4bdc8; border-radius: 4px; padding: 3px 6px; min-height: 0;
   }
-  /* 一覧だけがスクロールする（見出しと下のバーは動かない）。上のタブ・見出し・下のバー分を引いた高さ */
+  /* 一覧だけがスクロールする（見出しと下のバーは動かない）。高さは JS（trackViewport）が --mx-h に入れる
+     （画面の高さ − ヘッダーとタブバー − 見出し − 下のバー）。端まで行ってもページは動かさない */
   .mx-list { overflow-y: auto; -webkit-overflow-scrolling: touch; background: #fbfbfc;
-             max-height: max(270px, calc(var(--vis-h, 600px) - 330px)); }
+             max-height: var(--mx-h, 360px); overscroll-behavior: contain; }
   .mx-row { display: grid; grid-template-columns: var(--mx-cols); height: 54px; align-items: center; border-bottom: 1px solid #e8ecf0; }
   .mx-row.on { background: #f4f6f8; }
   .mx-horse { display: flex; align-items: center; gap: 8px; padding-left: 12px; min-width: 0; }
@@ -895,6 +896,14 @@
       // バーの下端は、画面の下から40px上（右下の「Manage app」を避ける）。枠の下端を越えない
       root.style.setProperty("--bar-b", Math.min(visBottom - 40, docH - 8) + "px");
       root.style.setProperty("--slip-bottom", Math.max(0, docH - visBottom) + "px");
+      // 馬選択の一覧の高さ: 画面の高さ − ヘッダーとタブバー − 見出し − 下のバー。
+      // ページのスクロール位置には依らない値にする（依ると、スクロールのたびに高さが変わって揺れる）
+      const mxHead = document.querySelector && document.querySelector(".mx-head");
+      if (mxHead) {
+        const headH = mxHead.offsetHeight || 70;
+        const covered = Math.max(0, (payload.reservePx || 0) - 52);
+        root.style.setProperty("--mx-h", Math.max(240, Math.round(view - covered - headH - 106)) + "px");
+      }
     };
     if (window.requestAnimationFrame) window.requestAnimationFrame(run); else run();
   }
@@ -2407,6 +2416,7 @@
 
     // 「オッズの低い順」の表・軸ごとのオッズ表は出さない（不要。人気順の一覧がその役目）
     refresh();
+    if (matrix) trackViewport();         // 一覧の高さ（--mx-h）を、いまの画面に合わせる
   }
 
   window.addEventListener("message", function (event) {
