@@ -865,7 +865,7 @@
     const least = Math.max(360, total - Math.max(0, (payload.reservePx || 0) - 52));
     // 一番下でも最後の行がバーに隠れない余白。馬選択（一覧が画面の残りいっぱいまである）では、
     // 一番下までスクロールしても一覧の下に余白が残らないよう、バーの高さぶんだけにする
-    const room = document.querySelector && document.querySelector(".mx") ? 76 : 150;
+    const room = document.querySelector && document.querySelector(".mx") ? 100 : 150;
     return Math.max(least, Math.round((content || 0) + room));
   }
 
@@ -970,8 +970,22 @@
   ].join("");
 
   let frameVisible = true;
+  let matrixShown = false;       // いま馬選択（drawMatrix）を出しているか
+
+  /**
+   * 馬選択が見えているあいだ、親ページの `<html>` に目印（data-keiba-odds-fill）を付ける。
+   * keiba-app の theme.py は、これがあるときだけ画面の下の余白（150px）をなくす
+   * （一覧が画面の残りいっぱいまであるので、下に余白があると一番下まで送ったとき空白が残る）。
+   */
+  function hostFlag() {
+    const host = barHost();
+    if (host === document || !host.documentElement) return;
+    if (matrixShown && frameVisible) host.documentElement.setAttribute("data-keiba-odds-fill", "1");
+    else host.documentElement.removeAttribute("data-keiba-odds-fill");
+  }
   /** 親ページに置いたバーは、オッズが見えていないとき（別のタブ）と、買い目シートが開いているときは隠す。 */
   function syncBar() {
+    hostFlag();
     const host = barHost();
     if (host === document) return;
     const hide = !frameVisible || document.body.classList.contains("sheet-open");
@@ -1022,6 +1036,8 @@
       observer.observe(window.frameElement);
     } catch (e) { /* 見張れなければ出したままにする */ }
     window.addEventListener("pagehide", function () {
+      matrixShown = false;
+      hostFlag();
       [bar, choice, style].forEach(function (node) {
         if (node.parentNode) node.parentNode.removeChild(node);
       });
@@ -2218,6 +2234,8 @@
   // --- 1つのタブぶんの中身 -------------------------------------------------------
 
   function drawPanel(animate) {
+    matrixShown = false;            // 馬選択を出すときだけ、下で立て直す
+    hostFlag();
     const panel = document.getElementById("panel");
     panel.textContent = "";
     panel.classList.remove("fade");
@@ -2419,7 +2437,11 @@
 
     // 「オッズの低い順」の表・軸ごとのオッズ表は出さない（不要。人気順の一覧がその役目）
     refresh();
-    if (matrix) trackViewport();         // 一覧の高さ（--mx-h）を、いまの画面に合わせる
+    if (matrix) {
+      matrixShown = true;
+      hostFlag();
+      trackViewport();                   // 一覧の高さ（--mx-h）を、いまの画面に合わせる
+    }
   }
 
   window.addEventListener("message", function (event) {
