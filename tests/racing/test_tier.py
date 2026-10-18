@@ -141,6 +141,15 @@ def test_the_order_of_the_runs_does_not_matter():
             tier.experience_level(recovered, gen=gen)[0])
 
 
+def test_one_heavy_defeat_does_not_wreck_a_good_record():
+    """負けは重く見ず、いいところで評価する。GIの好走が1走の大敗で崩れにくい。"""
+    good = [run(level_grade="GI", finish=2, n_runners=18) for _ in range(3)]          # 7.5 ×3
+    beaten = [run(level_grade="GII", finish=12, n_runners=12), *good]                 # 前走 3.0
+    for gen in ("classic", "old"):
+        drop = tier.experience_level(good, gen=gen)[0] - tier.experience_level(beaten, gen=gen)[0]
+        assert 0 < drop < 0.5
+
+
 def test_a_couple_of_good_runs_no_longer_hide_the_bad_ones():
     """「2走良くて3走大敗」は、3走とも勝っている馬には届かない。"""
     mixed = [run(level_class="2勝クラス", finish=1),                      # 3.0
@@ -319,9 +328,9 @@ def test_pace_fit_is_neutral_without_material():
 
 def test_tier_boundaries():
     """線は「実測でどれだけ走る層か」で引いてある（B=勝率20%前後 / C=複勝率30%前後）。"""
-    assert tier.tier_of(0.25) == "B" and tier.tier_of(2.0) == "B"
-    assert tier.tier_of(0.24) == "C" and tier.tier_of(-1.0) == "C"
-    assert tier.tier_of(-1.01) == "D"
+    assert tier.tier_of(0.85) == "B" and tier.tier_of(2.0) == "B"
+    assert tier.tier_of(0.84) == "C" and tier.tier_of(-0.9) == "C"
+    assert tier.tier_of(-0.91) == "D"
 
 
 def test_a_is_never_decided_by_a_threshold():
