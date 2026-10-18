@@ -101,27 +101,61 @@ def test_runs_without_a_finish_are_skipped():
 # --- 実績レベル ---------------------------------------------------------------------
 
 
-def test_experience_uses_the_three_best_of_the_recent_runs():
-    runs = [run(level_class="1勝クラス", finish=1),      # 2.0
-            run(level_class="2勝クラス", finish=3),      # 2.5
-            run(level_class="未勝利", finish=1)]         # 1.0
-    level, used = tier.experience_level(runs)
-    assert level == pytest.approx(11 / 6)                # (2.5 + 2.0 + 1.0) / 3
-    assert used == 3
+def climbing_winner():
+    """条件戦を1つずつ勝ち上がって、前走でGIIを勝った馬（新しい順）。"""
+    return [run(level_grade="GII", level_class="オープン", finish=1),   # 7.0
+            run(level_class="2勝クラス", finish=1),                     # 3.0
+            run(level_class="1勝クラス", finish=1),                     # 2.0
+            run(level_class="新馬", finish=1)]                          # 1.0
+
+
+def test_a_classic_winner_is_not_diluted_by_her_early_runs():
+    """クラシック世代は、前走の重賞勝ちが古い条件戦の走に薄められにくい。
+
+    上位3走の単純平均だった頃は (7+3+2)/3 = 4.0 で、秋華賞ではDだった。
+    """
+    classic, used = tier.experience_level(climbing_winner(), gen="classic")
+    old, _ = tier.experience_level(climbing_winner(), gen="old")
+    assert used == 4
+    assert classic > old > 4.0
+    assert classic < 7.0                  # 1走だけの好走をそのまま信じはしない
+
+
+def test_recent_runs_weigh_more_than_old_ones():
+    """同じ値の並びでも、悪い走が前走なら低く、古い走なら高い。"""
+    slumping = [run(level_class="2勝クラス", finish=16, n_runners=16),   # -1.0（前走）
+                run(level_class="2勝クラス", finish=1), run(level_class="2勝クラス", finish=1)]
+    recovered = [slumping[1], slumping[2], slumping[0]]
+    for gen in ("classic", "old"):
+        assert tier.experience_level(slumping, gen=gen)[0] < tier.experience_level(recovered, gen=gen)[0]
 
 
 def test_a_couple_of_good_runs_no_longer_hide_the_bad_ones():
-    """上位2走だけを見ていた頃は「2走良くて3走大敗」が満点に見えていた。"""
+    """「2走良くて3走大敗」は、3走とも勝っている馬には届かない。"""
     mixed = [run(level_class="2勝クラス", finish=1),                      # 3.0
              run(level_class="2勝クラス", finish=1),                      # 3.0
              run(level_class="2勝クラス", finish=15, n_runners=16),       # -1.0
              run(level_class="2勝クラス", finish=16, n_runners=16),       # -1.0
              run(level_class="2勝クラス", finish=14, n_runners=16)]       # -1.0
-    level, _ = tier.experience_level(mixed)
-    assert level == pytest.approx(5 / 3)                 # (3.0 + 3.0 - 1.0) / 3
-    # 3走とも勝っている馬には届かない
     solid = [run(level_class="2勝クラス", finish=1) for _ in range(5)]
-    assert level < tier.experience_level(solid)[0]
+    for gen in ("classic", "old"):
+        assert tier.experience_level(mixed, gen=gen)[0] < tier.experience_level(solid, gen=gen)[0]
+
+
+def test_the_generation_comes_from_the_age_condition():
+    assert tier.generation({"age_condition": "3歳"}) == "classic"
+    assert tier.generation({"age_condition": "２歳"}) == "classic"     # 全角でも同じ
+    assert tier.generation({"age_condition": "3歳以上"}) == "old"
+    assert tier.generation({"age_condition": "4歳以上"}) == "old"
+    assert tier.generation({}) == "old"                                # 分からなければ古馬戦
+
+
+def test_score_horse_uses_the_generation_of_todays_race():
+    classic = tier.score_horse({**race(grade="GI"), "age_condition": "3歳"},
+                               climbing_winner(), [], None, base_level=7.0)
+    old = tier.score_horse({**race(grade="GI"), "age_condition": "3歳以上"},
+                           climbing_winner(), [], None, base_level=7.0)
+    assert classic.experience > old.experience
 
 
 def test_running_in_a_big_race_without_coping_does_not_lift_the_horse():
@@ -274,8 +308,8 @@ def test_pace_fit_is_neutral_without_material():
 
 def test_tier_boundaries():
     """線は「実測でどれだけ走る層か」で引いてある（B=勝率20%前後 / C=複勝率30%前後）。"""
-    assert tier.tier_of(0.75) == "B" and tier.tier_of(2.0) == "B"
-    assert tier.tier_of(0.74) == "C" and tier.tier_of(-1.0) == "C"
+    assert tier.tier_of(0.25) == "B" and tier.tier_of(2.0) == "B"
+    assert tier.tier_of(0.24) == "C" and tier.tier_of(-1.0) == "C"
     assert tier.tier_of(-1.01) == "D"
 
 

@@ -14,10 +14,10 @@
 
 段の境目は「何%の馬をそこに入れるか」ではなく、**実測でどれだけ走る層か**で引いている:
 
-    A … 勝率30%以上（実測40.8%）
-    B … 勝率20%前後（実測20.2%）
-    C … 複勝率30%前後（実測27.8%）
-    D … それ未満（実測 勝率3.2%・複勝率11.8%）
+    A … 勝率30%以上（実測42.6%）
+    B … 勝率20%前後（実測20.4%）
+    C … 複勝率30%前後（実測29.5%）
+    D … それ未満（実測 勝率3.3%・複勝率12.3%）
 
 **回収率は盤で扱わない。** どの段も100%に届かないので、段の名前を「期待値あり」に
 すると「買えば得」と読めてしまう。妙味は、映像や展開を見て手で動かすところで拾う。
@@ -26,7 +26,7 @@
 なったから（1レースで最上位の1頭だけを選んでも21%が天井だった）。着順とクラスしか
 材料にしていないので、絶対的な強さの精度はそこまでしか出ない。いっぽう「同じレースの
 中でどれだけ抜けているか」は相対の話なので、同じ材料でももっと効く。実測で勝率は
-33.4%になり、1番人気（約33%）と並んだ。「倒した相手」を入れてからは40.8%。
+33.4%になり、1番人気（約33%）と並んだ。「倒した相手」と世代別の積み上げ方を入れてからは42.6%。
 そのかわり**Aは95%のレースで出ない**。
 
 **倒した相手**: クラスと着順だけだと、同じGII勝ちでも相手が弱いのか世代トップなのかが
@@ -35,7 +35,12 @@
 例: ローズS（GII）で2着エンネ（フローラS 2着・オークス4番人気）に0.5秒差で勝った走は、
 相手が強いぶん、ただのGII勝ちより高くなる。負けた走も「誰に何秒負けたか」で読む。
 実測（2024年以降9,300レース）で、margin の順と着順の順位相関が 0.319 → 0.401、
-レース内で margin 1番の馬の勝率が 21.1% → 23.6% に上がった。
+レース内で margin 1番の馬の勝率が 19.7% → 22.9% に上がった。
+
+**実績の積み上げ方は世代で分ける**（AGGREGATION）。直近5走の加重平均で、
+クラシック世代（2歳・3歳限定戦）は良い走を重く、古馬戦は新しい走を重く見る。
+2〜3歳は条件戦を使いながら強くなる途中なので、古い条件戦の走で前走の重賞勝ちを
+薄めない。入れたあとの順位相関は 0.423、1番手の勝率は 24.8%。
 
 実績レベルが主軸で、適性は最大でも±0.9段ぶんしか動かさない。「未勝利しか勝って
 いない馬」が適性だけでGIIのAに来ることはなく、実績が拮抗している馬どうしでだけ
@@ -49,6 +54,7 @@
 
 from __future__ import annotations
 
+import math
 import unicodedata
 from dataclasses import dataclass, replace
 
@@ -78,8 +84,25 @@ TOP_SHARE = 0.3            # 上位30%以内なら「通用した」（±0）
 BEATEN_PENALTY = -3.0
 
 RECENT_RUNS = 5            # 実績レベルを見る直近の走数
-# そのうち上位何走を採るか。2走だと「2走だけ良くて3走は壊滅」を拾いすぎたので3走にした。
+# 相手の強さ（opponent_strength）は、相手の直近5走の上位何走の平均で見るか。
+# 2走だと「2走だけ良くて3走は壊滅」を拾いすぎたので3走にした。
 BEST_RUNS = 3
+
+# --- 実績の積み上げ方（世代で分ける） ----------------------------------------------
+# 実績レベル = 直近5走の値の加重平均。1走の重み = λ^i × exp((値 − 最高の値) / τ)
+# （i=0 が前走）。λ が小さいほど新しい走が重く、τ が小さいほど良い走が重い。
+#
+# **クラシック世代（2歳戦・3歳限定戦）と古馬戦で λ・τ を分ける。** 2〜3歳は条件戦を
+# 1つずつ使いながら強くなる途中なので、古い条件戦の走で前走の重賞勝ちを薄めると
+# 評価を誤る（4戦4勝で前走ローズS勝ちの馬が、上位3走の単純平均では秋華賞のDだった）。
+# 2024年以降9,300レースを当時の材料だけで採点し直した格子探索で決めた:
+#   クラシック世代（4,763レース）: 良い走を重く（τ=4）。1番手の勝率 23.0%→24.5%、
+#                                   順位相関 0.379→0.390（τ=∞ の平均だと 0.384）
+#   古馬戦（4,535レース）        : 新しい走を重く、良し悪しはほぼ均等（τ=10）。
+#                                   1番手の勝率 24.3%→26.7%、順位相関 0.424→0.457
+# 以前の「上位3走の単純平均」はどちらのグループでもこれより悪かった。
+CLASSIC_AGES = ("2歳", "3歳")
+AGGREGATION = {"classic": (0.55, 4.0), "old": (0.6, 10.0)}   # 世代 -> (λ, τ)
 
 # --- 倒した相手 -------------------------------------------------------------------
 # 過去走のレースで、自分を除く上位何頭を「相手」として見るか。
@@ -113,9 +136,9 @@ NEIGHBOUR_DISTANCE_M = 200  # コース適性で「近い距離」とみなす�
 #
 # 線は「何%の馬をそこに入れるか」ではなく、**実測でどれだけ走る層か**で引いている。
 # 2024年以降9,300レースの実測で B=勝率20%前後 / C=複勝率30%前後 になる位置。
-# 「倒した相手」を入れて尺度が変わったので、Bの線を0.5→0.75に引き直した。
-# Cの線は−1.0のまま。−0.5側へ寄せると新馬戦の未出走馬の山（−0.5）が線に乗ってしまう。
-TIER_THRESHOLDS = (("B", 0.75), ("C", -1.0))
+# 「倒した相手」と世代別の積み上げ方を入れて尺度が変わったので、Bの線を0.5→0.25に
+# 引き直した（Cの線は−1.0のまま）。新馬戦の未出走馬の山（−0.5）はどちらの線からも離れている。
+TIER_THRESHOLDS = (("B", 0.25), ("C", -1.0))
 LOWEST_TIER = "D"
 TIERS = ("A", "B", "C", "D")
 
@@ -151,22 +174,22 @@ TIER_MEANINGS = {
 # **盤では回収率を扱わない**ので、ここに残すのは勝率と複勝率だけ。
 # 買えば得かどうか（妙味）は、映像や展開を見て手で動かすところの仕事にしている。
 CALIBRATION = {
-    "A": {"starts": 622, "win": 0.408, "top3": 0.740, "popularity": 1.5},
-    "B": {"starts": 11551, "win": 0.202, "top3": 0.475, "popularity": 3.1},
-    "C": {"starts": 51932, "win": 0.091, "top3": 0.278, "popularity": 6.2},
-    "D": {"starts": 63826, "win": 0.032, "top3": 0.118, "popularity": 9.8},
+    "A": {"starts": 658, "win": 0.426, "top3": 0.729, "popularity": 1.5},
+    "B": {"starts": 14182, "win": 0.204, "top3": 0.487, "popularity": 3.0},
+    "C": {"starts": 38621, "win": 0.096, "top3": 0.295, "popularity": 5.8},
+    "D": {"starts": 74470, "win": 0.033, "top3": 0.123, "popularity": 9.7},
 }
 # Aが出たレースの割合と、出たときの頭数（同じ実測から）
-A_RACE_SHARE = 497 / 9298
-A_FIELD_SIZES = {1: 391, 2: 86, 3: 20}
+A_RACE_SHARE = 527 / 9298
+A_FIELD_SIZES = {1: 415, 2: 91, 3: 21}
 
 CALIBRATION_NOTE = (
     "2024年以降の9,298レース（127,931頭）で答え合わせをすると、"
-    "**勝率は A 40.8% / B 20.2% / C 9.1% / D 3.2%**、"
-    "**複勝率は 74% / 48% / 28% / 12%** と分かれました。"
+    "**勝率は A 42.6% / B 20.4% / C 9.6% / D 3.3%**、"
+    "**複勝率は 73% / 49% / 30% / 12%** と分かれました。"
     "段の狙いどおり、Aは勝率30%以上・Bは勝率20%前後・Cは複勝率30%前後です。"
     "**Aはそのレースで抜けている馬だけ**なので、出るのは5%のレースだけ（出たときは1〜3頭）。"
-    "平均人気は A 1.5番 / B 3.1番 / C 6.2番 / D 9.8番で、上の段ほど人気馬が集まります。"
+    "平均人気は A 1.5番 / B 3.0番 / C 5.8番 / D 9.7番で、上の段ほど人気馬が集まります。"
 )
 
 # 過去走がまったく無い馬を、今回のクラスの何段下とみなすか。
@@ -331,10 +354,17 @@ def read_run(
     return (1 - OPPONENT_WEIGHT) * value + OPPONENT_WEIGHT * median, opponents
 
 
+def generation(race: dict) -> str:
+    """今回のレースがクラシック世代の戦（2歳・3歳限定）か古馬戦か。分からなければ古馬戦。"""
+    age = unicodedata.normalize("NFKC", race.get("age_condition") or "").strip()
+    return "classic" if age in CLASSIC_AGES else "old"
+
+
 def _experience(
     runs: list[dict],
     fields: dict[str, list[dict]] | None,
     opponent_runs: dict[str, list[dict]] | None,
+    gen: str = "old",
 ) -> tuple[float | None, int, tuple[dict, Opponent] | None]:
     """実績レベル・使えた走数・説明に出す「いちばん効いた走で、いちばん強かった相手」。"""
     read = []
@@ -345,27 +375,35 @@ def _experience(
             read.append((value, run, opponents))
     if not read:
         return None, 0, None
-    best = sorted(read, key=lambda item: -item[0])[:BEST_RUNS]
+    recency, spread = AGGREGATION[gen]
+    top = max(value for value, _, _ in read)
+    weights = [recency ** i * math.exp((value - top) / spread)
+               for i, (value, _, _) in enumerate(read)]
+    level = sum(w * value for w, (value, _, _) in zip(weights, read)) / sum(weights)
+    # 説明には、重みのいちばん大きい走（の中で相手が読めたもの）を出す
+    by_weight = sorted(zip(weights, read), key=lambda item: -item[0])
     headline = next(
-        ((run, max(opponents, key=lambda o: o.strength)) for _, run, opponents in best if opponents),
+        ((run, max(opponents, key=lambda o: o.strength))
+         for _, (_, run, opponents) in by_weight if opponents),
         None,
     )
-    return sum(v for v, _, _ in best) / len(best), len(read), headline
+    return level, len(read), headline
 
 
 def experience_level(
     runs: list[dict],
     fields: dict[str, list[dict]] | None = None,
     opponent_runs: dict[str, list[dict]] | None = None,
+    gen: str = "old",
 ) -> tuple[float | None, int]:
     """実績レベルと、それに使えた走数。
 
-    直近5走のうち**上位3走の平均**を採る。1走の大敗や展開負けで評価が壊れないように
-    するためで、逆に「1走だけ格上で好走した」は拾いたいので最大値そのままにはしない。
+    直近5走の値の**加重平均**（新しい走・良い走ほど重い。重みは世代 `gen` で変わる。
+    AGGREGATION を参照）。最大値そのままにしないのは、1走だけの好走を過信しないため。
     `fields`（レースID → 上位の馬）と `opponent_runs`（相手の馬ID → 直近の走）を渡すと、
     1走ごとの値に「倒した相手」が入る。渡さなければクラス×着順だけで見る。
     """
-    level, n_runs, _ = _experience(runs, fields, opponent_runs)
+    level, n_runs, _ = _experience(runs, fields, opponent_runs, gen)
     return level, n_runs
 
 
@@ -466,7 +504,7 @@ def _explain(score_parts: dict) -> str:
         )
     text = (
         f"実績レベル {score_parts['experience']:.1f}"
-        f"（直近{score_parts['runs']}走の良いほうから）"
+        f"（直近{score_parts['runs']}走。新しい走・良い走ほど重く）"
     )
     headline = score_parts.get("headline")
     if headline:
@@ -499,7 +537,7 @@ def score_horse(
     `all_unraced` は「そのレースの全頭が未出走か」。未出走馬の置き場所だけが
     これで変わる（同じ未出走でも、新馬戦と混走では実測がまるで違うため）。
     """
-    experience, n_runs, headline = _experience(runs, fields, opponent_runs)
+    experience, n_runs, headline = _experience(runs, fields, opponent_runs, generation(race))
     if experience is None:
         gap = UNRACED_GAP_MAIDEN if all_unraced else UNRACED_GAP_MIXED
         experience = base_level - gap
