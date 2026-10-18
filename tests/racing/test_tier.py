@@ -110,24 +110,30 @@ def climbing_winner():
 
 
 def test_a_classic_winner_is_not_diluted_by_her_early_runs():
-    """クラシック世代は、前走の重賞勝ちが古い条件戦の走に薄められにくい。
+    """クラシック世代は、重賞勝ちが古い条件戦の走に薄められにくい。
 
     上位3走の単純平均だった頃は (7+3+2)/3 = 4.0 で、秋華賞ではDだった。
+    古馬戦の集計（単純平均に近い）より、良い走を重く見る。
     """
     classic, used = tier.experience_level(climbing_winner(), gen="classic")
     old, _ = tier.experience_level(climbing_winner(), gen="old")
     assert used == 4
-    assert classic > old > 4.0
+    assert classic > 4.0 and classic > old
     assert classic < 7.0                  # 1走だけの好走をそのまま信じはしない
 
 
-def test_recent_runs_weigh_more_than_old_ones():
-    """同じ値の並びでも、悪い走が前走なら低く、古い走なら高い。"""
+def test_the_order_of_the_runs_does_not_matter():
+    """走の新しさでは重みを変えない。
+
+    新しい走ほど重くすると、重賞の前のトライアルを叩きで負けた馬が大きく下がり、
+    重賞の盤がほぼDになった。
+    """
     slumping = [run(level_class="2勝クラス", finish=16, n_runners=16),   # -1.0（前走）
                 run(level_class="2勝クラス", finish=1), run(level_class="2勝クラス", finish=1)]
     recovered = [slumping[1], slumping[2], slumping[0]]
     for gen in ("classic", "old"):
-        assert tier.experience_level(slumping, gen=gen)[0] < tier.experience_level(recovered, gen=gen)[0]
+        assert tier.experience_level(slumping, gen=gen)[0] == pytest.approx(
+            tier.experience_level(recovered, gen=gen)[0])
 
 
 def test_a_couple_of_good_runs_no_longer_hide_the_bad_ones():
