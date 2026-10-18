@@ -143,6 +143,105 @@ def test_experience_without_any_usable_run():
     assert tier.experience_level([]) == (None, 0)
 
 
+# --- 倒した相手 ---------------------------------------------------------------------
+
+
+def timed(level_grade=None, level_class=None, finish=1, time_sec=120.0, horse_id="me",
+          race_id="r1", distance_m=2000):
+    return {**run(level_grade, level_class, finish), "time_sec": time_sec,
+            "horse_id": horse_id, "race_id": race_id, "distance_m": distance_m}
+
+
+def field_of(*others, me_time=120.0):
+    """そのレースの上位（自分＋相手）。others は (馬ID, 着順, タイム)。"""
+    rows = [{"horse_id": "me", "horse_name": "自分", "finish_position": 1, "time_sec": me_time}]
+    rows += [{"horse_id": h, "horse_name": h, "finish_position": f, "time_sec": t}
+             for h, f, t in others]
+    return rows
+
+
+GI_PLACER = [run(level_grade="GI", finish=2, n_runners=18)]          # 強さ 7.5
+MAIDEN_LOSER = [run(level_class="未勝利", finish=12, n_runners=16)]   # 強さ -3.0
+
+
+def test_beating_a_strong_horse_is_worth_more_than_beating_a_weak_one():
+    """同じGII勝ちでも、GI好走馬に先着した走のほうが高い。"""
+    me = timed(level_grade="GII")
+    strong, _ = tier.read_run(me, field_of(("x", 2, 120.5)), {"x": GI_PLACER})
+    weak, _ = tier.read_run(me, field_of(("x", 2, 120.5)), {"x": MAIDEN_LOSER})
+    assert strong > tier.run_value(me) > weak
+
+
+def test_a_bigger_margin_over_the_same_horse_is_worth_more():
+    me = timed(level_grade="GII")
+    close, _ = tier.read_run(me, field_of(("x", 2, 120.1)), {"x": GI_PLACER})
+    clear, _ = tier.read_run(me, field_of(("x", 2, 121.0)), {"x": GI_PLACER})
+    assert clear > close
+
+
+def test_losing_narrowly_to_a_strong_horse_still_reads_well():
+    """負けた走も「誰に何秒負けたか」で読む。GI好走馬にクビ差なら、ただの2着より高い。"""
+    me = {**timed(level_grade="GII", finish=2), "time_sec": 120.1}
+    field = [{"horse_id": "x", "horse_name": "x", "finish_position": 1, "time_sec": 120.0},
+             {"horse_id": "me", "horse_name": "自分", "finish_position": 2, "time_sec": 120.1}]
+    value, opponents = tier.read_run(me, field, {"x": GI_PLACER})
+    assert value > tier.run_value(me)
+    assert opponents[0].gap_sec > 0                      # 負け
+
+
+def test_seconds_are_compared_per_1000m():
+    """同じ0.5秒差でも、短い距離のほうが大きい差として読む。"""
+    sprint = timed(level_grade="GII", distance_m=1200)
+    stayer = timed(level_grade="GII", distance_m=3000)
+    field, opps = field_of(("x", 2, 120.5)), {"x": GI_PLACER}
+    assert tier.read_run(sprint, field, opps)[0] > tier.read_run(stayer, field, opps)[0]
+
+
+def test_without_opponent_material_the_run_keeps_its_class_value():
+    me = timed(level_class="2勝クラス")
+    assert tier.read_run(me, [], {})[0] == tier.run_value(me)
+    assert tier.read_run(me, field_of(("x", 2, 120.5)), {})[0] == tier.run_value(me)
+    assert tier.read_run({**me, "time_sec": None}, field_of(("x", 2, 120.5)),
+                         {"x": GI_PLACER})[0] == tier.run_value(me)
+    # 相手を渡さなければ、実績レベルは今までどおりクラス×着順だけ
+    assert tier.experience_level([me]) == (tier.run_value(me), 1)
+
+
+def test_one_odd_opponent_does_not_wreck_the_reading():
+    """相手5頭の中央値なので、1頭だけ極端に弱い相手がいても読みは崩れない。"""
+    me = timed(level_grade="GII")
+    others = [(f"x{i}", i + 2, 120.5) for i in range(5)]
+    opps = {f"x{i}": GI_PLACER for i in range(5)}
+    even, _ = tier.read_run(me, field_of(*others), opps)
+    odd, _ = tier.read_run(me, field_of(*others), {**opps, "x4": MAIDEN_LOSER})
+    assert odd == pytest.approx(even)
+
+
+def test_only_the_top_five_others_are_opponents():
+    me = timed(level_grade="GII")
+    others = [(f"x{i}", i + 2, 120.5 + i * 0.1) for i in range(7)]
+    _, opponents = tier.read_run(me, field_of(*others), {f"x{i}": GI_PLACER for i in range(7)})
+    assert [o.name for o in opponents] == ["x0", "x1", "x2", "x3", "x4"]
+
+
+def test_popularity_counts_towards_the_opponent_strength():
+    """「GIで4番人気」は市場がGI上位とみていた証拠。人気薄より強いとみる。"""
+    fancied = [{**run(level_grade="GI", finish=7, n_runners=18), "popularity": 1}]
+    outsider = [{**run(level_grade="GI", finish=7, n_runners=18), "popularity": 18}]
+    assert tier.opponent_strength(fancied) > tier.opponent_strength(outsider)
+    assert tier.opponent_strength([]) is None
+
+
+def test_the_explanation_names_the_strongest_horse_beaten():
+    me = {**timed(level_grade="GII"), "race_name": "ローズS"}
+    fields = {"r1": field_of(("エンネ", 2, 120.5), ("弱い馬", 3, 120.7))}
+    opps = {"エンネ": GI_PLACER, "弱い馬": MAIDEN_LOSER}
+    score = tier.score_horse(GII, [me], [], None, base_level=6.0,
+                             fields=fields, opponent_runs=opps)
+    assert "ローズSでエンネ" in score.explanation
+    assert "0.5秒先着" in score.explanation
+
+
 # --- 適性（出走が少ないときの扱い） ---------------------------------------------------
 
 
@@ -175,8 +274,8 @@ def test_pace_fit_is_neutral_without_material():
 
 def test_tier_boundaries():
     """線は「実測でどれだけ走る層か」で引いてある（B=勝率20%前後 / C=複勝率30%前後）。"""
-    assert tier.tier_of(0.5) == "B" and tier.tier_of(2.0) == "B"
-    assert tier.tier_of(0.49) == "C" and tier.tier_of(-1.0) == "C"
+    assert tier.tier_of(0.75) == "B" and tier.tier_of(2.0) == "B"
+    assert tier.tier_of(0.74) == "C" and tier.tier_of(-1.0) == "C"
     assert tier.tier_of(-1.01) == "D"
 
 

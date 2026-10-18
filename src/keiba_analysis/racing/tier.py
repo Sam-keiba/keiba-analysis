@@ -6,6 +6,7 @@
 こうすると閾値の意味がそのまま日本語になり、内訳も説明できる。
 
     推定レベル = 実績レベル（戦ってきた相手）+ 適性補正（ペース・コース）
+    1走の値    = クラス×着順 と「倒した相手（その相手との秒差）」を混ぜたもの
     margin     = 推定レベル − 今回のクラスのレベル
 
     B/C/D … margin の閾値で決まる（1頭ずつ決まる）
@@ -13,10 +14,10 @@
 
 段の境目は「何%の馬をそこに入れるか」ではなく、**実測でどれだけ走る層か**で引いている:
 
-    A … 勝率30%以上（実測31.8%）
-    B … 勝率20%前後（実測19.6%）
-    C … 複勝率30%前後（実測29.4%）
-    D … それ未満（実測 勝率4.0%・複勝率14.1%）
+    A … 勝率30%以上（実測40.8%）
+    B … 勝率20%前後（実測20.2%）
+    C … 複勝率30%前後（実測27.8%）
+    D … それ未満（実測 勝率3.2%・複勝率11.8%）
 
 **回収率は盤で扱わない。** どの段も100%に届かないので、段の名前を「期待値あり」に
 すると「買えば得」と読めてしまう。妙味は、映像や展開を見て手で動かすところで拾う。
@@ -25,7 +26,16 @@
 なったから（1レースで最上位の1頭だけを選んでも21%が天井だった）。着順とクラスしか
 材料にしていないので、絶対的な強さの精度はそこまでしか出ない。いっぽう「同じレースの
 中でどれだけ抜けているか」は相対の話なので、同じ材料でももっと効く。実測で勝率は
-33.4%になり、1番人気（約33%）と並んだ。そのかわり**Aは93%のレースで出ない**。
+33.4%になり、1番人気（約33%）と並んだ。「倒した相手」を入れてからは40.8%。
+そのかわり**Aは95%のレースで出ない**。
+
+**倒した相手**: クラスと着順だけだと、同じGII勝ちでも相手が弱いのか世代トップなのかが
+分からない。そこで1走ごとに、そのレースの上位5頭（自分を除く）の強さと、その馬との
+タイム差から「この走から読める自分のレベル」を出し、クラス×着順の値と混ぜる。
+例: ローズS（GII）で2着エンネ（フローラS 2着・オークス4番人気）に0.5秒差で勝った走は、
+相手が強いぶん、ただのGII勝ちより高くなる。負けた走も「誰に何秒負けたか」で読む。
+実測（2024年以降9,300レース）で、margin の順と着順の順位相関が 0.319 → 0.401、
+レース内で margin 1番の馬の勝率が 21.1% → 23.6% に上がった。
 
 実績レベルが主軸で、適性は最大でも±0.9段ぶんしか動かさない。「未勝利しか勝って
 いない馬」が適性だけでGIIのAに来ることはなく、実績が拮抗している馬どうしでだけ
@@ -33,7 +43,7 @@
 
 改善の余地（次のフェーズ以降）:
 - 斤量・騎手・馬体重の増減・休み明けを見ていない
-- 相手レベルは着順だけで、着差やタイムを見ていない
+- 相手の強さはクラス×着順と人気だけで見ている（相手の「倒した相手」までは追わない）
 - 閾値は過去レースでの回収率で較正した暫定値（README参照）
 """
 
@@ -71,6 +81,22 @@ RECENT_RUNS = 5            # 実績レベルを見る直近の走数
 # そのうち上位何走を採るか。2走だと「2走だけ良くて3走は壊滅」を拾いすぎたので3走にした。
 BEST_RUNS = 3
 
+# --- 倒した相手 -------------------------------------------------------------------
+# 過去走のレースで、自分を除く上位何頭を「相手」として見るか。
+OPPONENTS = 5
+# 相手の強さ = 相手自身の直近5走の上位3走の平均。1走の値はクラス×着順（run_value）に、
+# **その走での人気**を足したもの。「GIで4番人気」は市場がその馬をGI上位とみていた証拠。
+# 1番人気で +POPULARITY_WEIGHT/2、最低人気で −POPULARITY_WEIGHT/2（段）。
+POPULARITY_WEIGHT = 3.0
+# 秒差を段に直す係数。**1,000mあたり1秒の差が何段か**（距離で割ってそろえる）。
+# 2000mで0.5秒差 → 1,000mあたり0.25秒 → 1段。
+SEC_TO_LEVEL = 4.0
+# 1走の値 = (1−w) × クラス×着順 + w × 相手から読んだ値（相手ごとの値の中央値）。
+# 中央値にするのは、相手の1頭が大敗続きで実績が極端に低い、などで壊れないため。
+OPPONENT_WEIGHT = 0.75
+# 3つの係数は、2024年以降9,300レースを当時の材料だけで採点し直した格子探索で決めた
+# （k=1〜8・w=0.25〜1・人気0〜4。この辺りは平らで、どれを選んでも順位相関0.39〜0.40）。
+
 # 適性補正の効き幅（段）。合計で最大±0.9段＝クラス1段より少し弱い。
 PACE_WEIGHT = 0.5
 COURSE_WEIGHT = 0.4
@@ -86,9 +112,10 @@ NEIGHBOUR_DISTANCE_M = 200  # コース適性で「近い距離」とみなす�
 # （下の「抜けた馬」の判定を参照）。
 #
 # 線は「何%の馬をそこに入れるか」ではなく、**実測でどれだけ走る層か**で引いている。
-# 2024年以降3,000レースの実測で B=勝率20%前後 / C=複勝率30%前後 になる位置。
-# A（勝率33.4%）から下へ、勝率20% → 複勝率30% と段が落ちる形にそろえてある。
-TIER_THRESHOLDS = (("B", 0.5), ("C", -1.0))
+# 2024年以降9,300レースの実測で B=勝率20%前後 / C=複勝率30%前後 になる位置。
+# 「倒した相手」を入れて尺度が変わったので、Bの線を0.5→0.75に引き直した。
+# Cの線は−1.0のまま。−0.5側へ寄せると新馬戦の未出走馬の山（−0.5）が線に乗ってしまう。
+TIER_THRESHOLDS = (("B", 0.75), ("C", -1.0))
 LOWEST_TIER = "D"
 TIERS = ("A", "B", "C", "D")
 
@@ -102,7 +129,7 @@ TIERS = ("A", "B", "C", "D")
 #
 # margin の高い順に並べ、上から見て最初に STANDOUT_GAP 以上の差が空くところで切り、
 # それより上のうち margin が STANDOUT_FLOOR 以上の馬をAにする。
-# 差が空かなければAなし。**94%のレースはAが出ない**（2024年以降4,000レースの実測）。
+# 差が空かなければAなし。**95%のレースはAが出ない**（2024年以降9,300レースの実測）。
 STANDOUT_GAP = 2.0       # 2位以下をクラス2つぶん離していること
 STANDOUT_FLOOR = 0.5     # かつ、今回のクラスより半段上のレベルであること
 MAX_STANDOUT = 3         # 4頭以上が横並びなら「抜けている」とは言えない
@@ -120,26 +147,26 @@ TIER_MEANINGS = {
     "D": "印を持たない",
 }
 
-# 2024年以降の実測（tools/calibrate_tier.py。当時の材料だけで採点し直したもの）。
+# 2024年以降の実測（9,298レース。当時の材料だけで採点し直したもの。「倒した相手」込み）。
 # **盤では回収率を扱わない**ので、ここに残すのは勝率と複勝率だけ。
 # 買えば得かどうか（妙味）は、映像や展開を見て手で動かすところの仕事にしている。
 CALIBRATION = {
-    "A": {"starts": 355, "win": 0.318, "top3": 0.654, "popularity": 2.0},
-    "B": {"starts": 3514, "win": 0.196, "top3": 0.480, "popularity": 3.0},
-    "C": {"starts": 11836, "win": 0.100, "top3": 0.294, "popularity": 5.9},
-    "D": {"starts": 25676, "win": 0.040, "top3": 0.141, "popularity": 9.2},
+    "A": {"starts": 622, "win": 0.408, "top3": 0.740, "popularity": 1.5},
+    "B": {"starts": 11551, "win": 0.202, "top3": 0.475, "popularity": 3.1},
+    "C": {"starts": 51932, "win": 0.091, "top3": 0.278, "popularity": 6.2},
+    "D": {"starts": 63826, "win": 0.032, "top3": 0.118, "popularity": 9.8},
 }
 # Aが出たレースの割合と、出たときの頭数（同じ実測から）
-A_RACE_SHARE = 234 / 3000
-A_FIELD_SIZES = {1: 138, 2: 70, 3: 26}
+A_RACE_SHARE = 497 / 9298
+A_FIELD_SIZES = {1: 391, 2: 86, 3: 20}
 
 CALIBRATION_NOTE = (
-    "2024年以降の3,000レース（41,381頭）で答え合わせをすると、"
-    "**勝率は A 31.8% / B 19.6% / C 10.0% / D 4.0%**、"
-    "**複勝率は 65% / 48% / 29% / 14%** と分かれました。"
+    "2024年以降の9,298レース（127,931頭）で答え合わせをすると、"
+    "**勝率は A 40.8% / B 20.2% / C 9.1% / D 3.2%**、"
+    "**複勝率は 74% / 48% / 28% / 12%** と分かれました。"
     "段の狙いどおり、Aは勝率30%以上・Bは勝率20%前後・Cは複勝率30%前後です。"
-    "**Aはそのレースで抜けている馬だけ**なので、出るのは8%のレースだけ（出たときは1〜3頭）。"
-    "平均人気は A 2.0番 / B 3.0番 / C 5.9番 / D 9.2番で、上の段ほど人気馬が集まります。"
+    "**Aはそのレースで抜けている馬だけ**なので、出るのは5%のレースだけ（出たときは1〜3頭）。"
+    "平均人気は A 1.5番 / B 3.1番 / C 6.2番 / D 9.8番で、上の段ほど人気馬が集まります。"
 )
 
 # 過去走がまったく無い馬を、今回のクラスの何段下とみなすか。
@@ -240,17 +267,106 @@ def run_value(run: dict) -> float | None:
     return level + BEATEN_PENALTY
 
 
-def experience_level(runs: list[dict]) -> tuple[float | None, int]:
+@dataclass(frozen=True)
+class Opponent:
+    """1走のなかの相手1頭（説明文に出す）。"""
+
+    name: str
+    strength: float          # 相手の強さ（段）
+    gap_sec: float           # 自分のタイム − 相手のタイム（マイナスなら先着）
+
+
+def opponent_strength(runs: list[dict]) -> float | None:
+    """相手の強さ。相手自身の直近5走から、クラス×着順＋その走での人気の上位3走の平均。
+
+    相手の「倒した相手」までは追わない（どこまでも再帰すると重く、説明もできなくなる）。
+    """
+    values = []
+    for run in runs[:RECENT_RUNS]:
+        value = run_value(run)
+        if value is None:
+            continue
+        pop, field = run.get("popularity"), run.get("n_runners") or 0
+        if pop and field >= 2:
+            value += POPULARITY_WEIGHT * (0.5 - (pop - 1) / (field - 1))
+        values.append(value)
+    if not values:
+        return None
+    best = sorted(values, reverse=True)[:BEST_RUNS]
+    return sum(best) / len(best)
+
+
+def read_run(
+    run: dict, field: list[dict], opponent_runs: dict[str, list[dict]],
+) -> tuple[float | None, list[Opponent]]:
+    """1走の値と、そこで比べた相手。
+
+    `field` はそのレースの上位の馬（馬ID・馬名・着順・タイム）。自分を除いた上位5頭の
+    それぞれについて「相手の強さ − 秒差（1,000mあたり）× SEC_TO_LEVEL」を出し、
+    その中央値をクラス×着順の値と混ぜる。相手が読めなければクラス×着順の値のまま。
+    """
+    value = run_value(run)
+    if value is None:
+        return None, []
+    time_sec, distance = run.get("time_sec"), run.get("distance_m")
+    if not time_sec or not distance:
+        return value, []
+    others = sorted(
+        (o for o in field if o.get("horse_id") != run.get("horse_id") and o.get("time_sec")),
+        key=lambda o: o.get("finish_position") or 99,
+    )[:OPPONENTS]
+    readings, opponents = [], []
+    for other in others:
+        strength = opponent_strength(opponent_runs.get(other["horse_id"], []))
+        if strength is None:
+            continue
+        gap = time_sec - other["time_sec"]
+        readings.append(strength - SEC_TO_LEVEL * gap * 1000 / distance)
+        opponents.append(Opponent(other.get("horse_name") or "", strength, gap))
+    if not readings:
+        return value, []
+    readings.sort()
+    mid = len(readings) // 2
+    median = readings[mid] if len(readings) % 2 else (readings[mid - 1] + readings[mid]) / 2
+    return (1 - OPPONENT_WEIGHT) * value + OPPONENT_WEIGHT * median, opponents
+
+
+def _experience(
+    runs: list[dict],
+    fields: dict[str, list[dict]] | None,
+    opponent_runs: dict[str, list[dict]] | None,
+) -> tuple[float | None, int, tuple[dict, Opponent] | None]:
+    """実績レベル・使えた走数・説明に出す「いちばん効いた走で、いちばん強かった相手」。"""
+    read = []
+    for run in runs[:RECENT_RUNS]:
+        field = (fields or {}).get(run.get("race_id"), [])
+        value, opponents = read_run(run, field, opponent_runs or {})
+        if value is not None:
+            read.append((value, run, opponents))
+    if not read:
+        return None, 0, None
+    best = sorted(read, key=lambda item: -item[0])[:BEST_RUNS]
+    headline = next(
+        ((run, max(opponents, key=lambda o: o.strength)) for _, run, opponents in best if opponents),
+        None,
+    )
+    return sum(v for v, _, _ in best) / len(best), len(read), headline
+
+
+def experience_level(
+    runs: list[dict],
+    fields: dict[str, list[dict]] | None = None,
+    opponent_runs: dict[str, list[dict]] | None = None,
+) -> tuple[float | None, int]:
     """実績レベルと、それに使えた走数。
 
     直近5走のうち**上位3走の平均**を採る。1走の大敗や展開負けで評価が壊れないように
     するためで、逆に「1走だけ格上で好走した」は拾いたいので最大値そのままにはしない。
+    `fields`（レースID → 上位の馬）と `opponent_runs`（相手の馬ID → 直近の走）を渡すと、
+    1走ごとの値に「倒した相手」が入る。渡さなければクラス×着順だけで見る。
     """
-    values = [v for v in (run_value(r) for r in runs[:RECENT_RUNS]) if v is not None]
-    if not values:
-        return None, 0
-    best = sorted(values, reverse=True)[:BEST_RUNS]
-    return sum(best) / len(best), len(values)
+    level, n_runs, _ = _experience(runs, fields, opponent_runs)
+    return level, n_runs
 
 
 def shrunk_rate(top3: int, starts: int) -> float:
@@ -348,9 +464,20 @@ def _explain(score_parts: dict) -> str:
             "過去走がまだ手元にありません。"
             "経験馬と混走している未出走馬は、実測で複勝率12%ほどです"
         )
-    return (
+    text = (
         f"実績レベル {score_parts['experience']:.1f}"
         f"（直近{score_parts['runs']}走の良いほうから）"
+    )
+    headline = score_parts.get("headline")
+    if headline:
+        run, other = headline
+        verb = "先着" if other.gap_sec < 0 else "同タイム" if other.gap_sec == 0 else "負け"
+        gap = "" if other.gap_sec == 0 else f"{abs(other.gap_sec):.1f}秒"
+        text += (
+            f"／倒した相手: {run.get('race_name') or '前の走'}で"
+            f"{other.name}（強さ{other.strength:.1f}）に{gap}{verb}"
+        )
+    return text + (
         f"／ペース適性 {word(score_parts['pace_fit'])}"
         f"／コース適性 {word(score_parts['course_fit'])}"
         f"／今回のクラスとの差 {score_parts['margin']:+.1f}段"
@@ -364,13 +491,15 @@ def score_horse(
     today_pace: str | None,
     base_level: float,
     all_unraced: bool = False,
+    fields: dict[str, list[dict]] | None = None,
+    opponent_runs: dict[str, list[dict]] | None = None,
 ) -> TierScore:
     """1頭ぶんのTierと内訳。
 
     `all_unraced` は「そのレースの全頭が未出走か」。未出走馬の置き場所だけが
     これで変わる（同じ未出走でも、新馬戦と混走では実測がまるで違うため）。
     """
-    experience, n_runs = experience_level(runs)
+    experience, n_runs, headline = _experience(runs, fields, opponent_runs)
     if experience is None:
         gap = UNRACED_GAP_MAIDEN if all_unraced else UNRACED_GAP_MIXED
         experience = base_level - gap
@@ -381,7 +510,7 @@ def score_horse(
     margin = level - base_level
     parts = {
         "experience": experience, "pace_fit": p_fit, "course_fit": c_fit,
-        "margin": margin, "runs": n_runs, "all_unraced": all_unraced,
+        "margin": margin, "runs": n_runs, "all_unraced": all_unraced, "headline": headline,
     }
     return TierScore(
         tier=tier_of(margin), experience=experience, pace_fit=p_fit, course_fit=c_fit,
@@ -395,11 +524,16 @@ def assign(
     past_runs: dict[str, list[dict]],
     stats_runs: dict[str, list[dict]],
     today_pace: str | None,
+    fields: dict[str, list[dict]] | None = None,
+    opponent_runs: dict[str, list[dict]] | None = None,
 ) -> dict[str, TierScore]:
     """出走各馬のTier。馬ID -> TierScore。
 
     `past_runs` は `data.get_past_runs_for_horses`（同じ馬場の直近10走）、
     `stats_runs` は `data.get_runs_for_stats`（同じ馬場の全走）の返り値を想定。
+    `fields` は過去走のレースID → その上位の馬（`data.get_top_finishers`）、
+    `opponent_runs` はその馬たちの直近の走（`data.get_class_runs`）。
+    無ければ「倒した相手」は入らず、クラス×着順だけで見る。
     """
     base = race_level(race)
     if base is None:
@@ -416,6 +550,7 @@ def assign(
         scores[horse_id] = score_horse(
             race, past_runs.get(horse_id, []), stats_runs.get(horse_id, []),
             today_pace, base, all_unraced=all_unraced,
+            fields=fields, opponent_runs=opponent_runs,
         )
     # Aは1頭ずつでは決まらない。全馬の margin がそろってから「抜けている馬」を選ぶ。
     # Aを分けた「切れ目」の差は、Aが2頭以上でも全員に同じ値を出す
