@@ -267,55 +267,6 @@ def test_fitness_alone_cannot_lift_a_much_weaker_horse():
     assert score.tier == "D"
 
 
-def climbing_winner():
-    """条件戦を1つずつ勝ち上がって、前走でGIIを勝った馬（新しい順）。"""
-    return [run(level_grade="GII", level_class="オープン", finish=1),   # 7.0
-            run(level_class="2勝クラス", finish=1),                     # 3.0
-            run(level_class="1勝クラス", finish=1),                     # 2.0
-            run(level_class="新馬", finish=1)]                          # 1.0
-
-
-def test_a_class_up_win_last_time_keeps_the_horse_out_of_d():
-    """上位3走の平均（4.0）だとGIでD。前走の昇級勝ちがあるのでCに置く。"""
-    score = tier.score_horse(race(grade="GI"), climbing_winner(), [], None, base_level=7.0)
-    assert score.margin < -1.0                    # margin は動かさない
-    assert score.tier == "C"
-    assert "前走が昇級勝ち" in score.explanation
-
-
-def test_the_class_up_floor_never_lifts_beyond_c():
-    """下限として効かせるだけ。Bまで上げると実測（勝率19%）に届かなかった。"""
-    assert tier.CLASS_UP_FLOOR == "C"
-    score = tier.score_horse(race(grade="GIII"), climbing_winner(), [], None, base_level=5.0)
-    assert score.tier == "C"                      # 元からC（margin −1.0〜0.5）なら何もしない
-    assert "前走が昇級勝ち" not in score.explanation
-
-
-def test_only_the_last_run_counts_as_a_class_up_win():
-    """昇級勝ちが2走前以前なら効かない（実測で同じようには走っていなかった）。"""
-    beaten_since = [run(level_grade="GI", finish=17, n_runners=18), *climbing_winner()]
-    assert not tier.won_class_up_last_time(beaten_since)
-    # 同じクラスでの勝ち・クラスを下げての勝ちは昇級ではない
-    assert not tier.won_class_up_last_time(
-        [run(level_class="2勝クラス", finish=1), run(level_class="2勝クラス", finish=4)])
-    assert not tier.won_class_up_last_time(
-        [run(level_class="1勝クラス", finish=1), run(level_class="2勝クラス", finish=9)])
-    # キャリア1戦（比べる走が無い）も昇級とは言わない
-    assert not tier.won_class_up_last_time([run(level_class="新馬", finish=1)])
-    assert tier.won_class_up_last_time(climbing_winner())
-
-
-def test_a_jump_of_several_classes_stays_discounted():
-    """2勝クラスを勝って次はGI、のような飛び級は条件戦の馬のまま（Dに残す）。"""
-    jumper = [run(level_class="2勝クラス", finish=1),        # 3.0
-              run(level_class="1勝クラス", finish=1),        # 2.0
-              run(level_class="未勝利", finish=1)]           # 1.0
-    assert tier.won_class_up_last_time(jumper)
-    score = tier.score_horse(race(grade="GI"), jumper, [], None, base_level=7.0)
-    assert score.tier == "D"
-    assert "前走が昇級勝ち" not in score.explanation
-
-
 def test_assign_covers_every_entry(monkeypatch):
     entries = [{"horse_id": "h1"}, {"horse_id": "h2"}]
     strong = [run(level_grade="GI", finish=1) for _ in range(3)]

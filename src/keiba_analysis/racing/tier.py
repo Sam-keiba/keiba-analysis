@@ -31,12 +31,6 @@
 いない馬」が適性だけでGIIのAに来ることはなく、実績が拮抗している馬どうしでだけ
 適性が順番を入れ替える。
 
-**前走が昇級勝ちの馬はDに落とさない**（最低C）。上位3走の平均だと、条件戦を
-1つずつ勝ち上がってきた馬は下のクラスの勝ちに薄められて、前走で重賞を勝っていても
-D になる（例: 4戦4勝で前走GII勝ち → 平均4.0でGIのD）。実測では、そういう馬は
-D に置かれていても勝率10.8%・複勝率29.6%で、Cの実測とそろっていた。
-「2勝クラスを勝って次はGI」のような飛び級は対象外（条件戦の馬として割り引いたまま）。
-
 改善の余地（次のフェーズ以降）:
 - 斤量・騎手・馬体重の増減・休み明けを見ていない
 - 相手レベルは着順だけで、着差やタイムを見ていない
@@ -97,19 +91,6 @@ NEIGHBOUR_DISTANCE_M = 200  # コース適性で「近い距離」とみなす�
 TIER_THRESHOLDS = (("B", 0.5), ("C", -1.0))
 LOWEST_TIER = "D"
 TIERS = ("A", "B", "C", "D")
-
-# 前走が昇級勝ち（直近5走のそれより前のどの走よりも高いクラスで勝った）の馬の最低の段。
-# 2024年以降9,300レースの実測で、この馬たちは margin でD（−1.0未満）に置かれていても
-# 勝率10.8%・複勝率29.6%（240頭）と、Cの実測（10.0%・29.1%）にそろっていた。
-# 逆に margin を底上げしてBまで上げると、Bに入った馬は勝率7〜10%でBの実測（19%）に
-# 届かなかった。だから「段の下限」として扱い、margin（＝Aの判定）は動かさない。
-# 見るのは前走だけ。昇級勝ちが2走前以前の馬は、実測で同じようには走っていなかった
-# （Cに置かれていた322頭で勝率6.8%・複勝率18.0%）。
-CLASS_UP_FLOOR = "C"
-# ただし今回のクラスが、前走の勝ちの値（勝ったクラス＋1）から1段上までのときだけ。
-# 「2勝クラスを勝って次はGI」のような飛び級は、条件戦の馬として割り引いたままにする
-# （実測でも勝率7.8%と、Cの10%には届かなかった。166頭）。
-CLASS_UP_REACH = 1.0
 
 # --- A（抜けた馬）の判定 ---------------------------------------------------------
 # Aは閾値では決まらない。「そのレースで2位以下をどれだけ離しているか」で決める。
@@ -272,18 +253,6 @@ def experience_level(runs: list[dict]) -> tuple[float | None, int]:
     return sum(best) / len(best), len(values)
 
 
-def won_class_up_last_time(runs: list[dict]) -> bool:
-    """前走が昇級勝ちか（直近5走で、それより前のどの走よりも高いクラスで勝った）。
-
-    比べる相手の走が無い（キャリア1戦）ときは昇級とは言えないので False。
-    """
-    if not runs or runs[0].get("finish_position") != 1:
-        return False
-    last = race_level(runs[0])
-    older = [level for level in (race_level(r) for r in runs[1:RECENT_RUNS]) if level is not None]
-    return last is not None and bool(older) and last > max(older)
-
-
 def shrunk_rate(top3: int, starts: int) -> float:
     """出走が少ないほど全体平均に寄せた複勝率。"""
     return (top3 + PRIOR_WEIGHT * PRIOR_RATE) / (starts + PRIOR_WEIGHT)
@@ -379,16 +348,13 @@ def _explain(score_parts: dict) -> str:
             "過去走がまだ手元にありません。"
             "経験馬と混走している未出走馬は、実測で複勝率12%ほどです"
         )
-    text = (
+    return (
         f"実績レベル {score_parts['experience']:.1f}"
         f"（直近{score_parts['runs']}走の良いほうから）"
         f"／ペース適性 {word(score_parts['pace_fit'])}"
         f"／コース適性 {word(score_parts['course_fit'])}"
         f"／今回のクラスとの差 {score_parts['margin']:+.1f}段"
     )
-    if score_parts.get("lifted"):
-        text += f"／**前走が昇級勝ちなので{CLASS_UP_FLOOR}に置く**"
-    return text
 
 
 def score_horse(
@@ -413,20 +379,12 @@ def score_horse(
     adjust = (p_fit - 0.5) * 2 * PACE_WEIGHT + (c_fit - 0.5) * 2 * COURSE_WEIGHT
     level = experience + adjust
     margin = level - base_level
-    lane = tier_of(margin)
-    # 前走の昇級勝ちは段の下限としてだけ効かせる（margin は動かさないのでAの判定も変わらない）
-    lifted = (
-        lane == LOWEST_TIER and won_class_up_last_time(runs)
-        and run_value(runs[0]) >= base_level - CLASS_UP_REACH
-    )
-    if lifted:
-        lane = CLASS_UP_FLOOR
     parts = {
         "experience": experience, "pace_fit": p_fit, "course_fit": c_fit,
-        "margin": margin, "runs": n_runs, "all_unraced": all_unraced, "lifted": lifted,
+        "margin": margin, "runs": n_runs, "all_unraced": all_unraced,
     }
     return TierScore(
-        tier=lane, experience=experience, pace_fit=p_fit, course_fit=c_fit,
+        tier=tier_of(margin), experience=experience, pace_fit=p_fit, course_fit=c_fit,
         adjust=adjust, level=level, margin=margin, runs=n_runs, explanation=_explain(parts),
     )
 
