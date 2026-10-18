@@ -48,6 +48,11 @@ def test_old_class_names_read_as_the_current_ones():
     assert tier.race_level(race(class_condition="未出走")) == 0.0
 
 
+def test_listed_spelled_out_is_the_same_as_l():
+    """grade が「リステッド」と書かれたレースもある。L と同じに読む。"""
+    assert tier.race_level(race(grade="リステッド")) == tier.race_level(race(grade="L"))
+
+
 def test_unknown_class_has_no_level():
     assert tier.race_level(race()) is None
     assert tier.race_level(race(class_condition="謎の条件")) is None
