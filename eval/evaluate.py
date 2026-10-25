@@ -87,24 +87,29 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def top_picks(df: pd.DataFrame) -> pd.DataFrame:
-    """各レースの予測1位。同点はオッズの低い馬、次に horse_id（毎回同じ結果にするため）。"""
-    ordered = df.assign(_odds=df["odds"].fillna(np.inf)).sort_values(
-        ["race_id", "p_win", "_odds", "horse_id"], ascending=[True, False, True, True],
+def top_picks(df: pd.DataFrame, tiebreak: str | None = None) -> pd.DataFrame:
+    """各レースの予測1位。同点はオッズの低い馬、次に horse_id（毎回同じ結果にするため）。
+
+    `tiebreak` に列名を渡すと、オッズの代わりにその列の小さい順で切る。
+    オッズを見てはいけない予想（ランダム・margin が同点の馬）は、seed 固定の乱数の列を渡す。
+    """
+    key = df[tiebreak] if tiebreak else df["odds"].fillna(np.inf)
+    ordered = df.assign(_key=key).sort_values(
+        ["race_id", "p_win", "_key", "horse_id"], ascending=[True, False, True, True],
     )
-    return ordered.groupby("race_id", sort=False).head(1).drop(columns="_odds")
+    return ordered.groupby("race_id", sort=False).head(1).drop(columns="_key")
 
 
 # --- 指標 -------------------------------------------------------------------------
 
-def hit_rate(df: pd.DataFrame) -> float:
+def hit_rate(df: pd.DataFrame, tiebreak: str | None = None) -> float:
     """予測1位が1着だった割合。"""
-    return float((top_picks(df)["finish"] == 1).mean())
+    return float((top_picks(df, tiebreak)["finish"] == 1).mean())
 
 
-def place_rate(df: pd.DataFrame) -> float:
+def place_rate(df: pd.DataFrame, tiebreak: str | None = None) -> float:
     """予測1位が3着以内だった割合。"""
-    return float((top_picks(df)["finish"] <= 3).mean())
+    return float((top_picks(df, tiebreak)["finish"] <= 3).mean())
 
 
 def _races_with_winner(df: pd.DataFrame) -> pd.DataFrame:
@@ -113,23 +118,45 @@ def _races_with_winner(df: pd.DataFrame) -> pd.DataFrame:
     return norm[has_winner]
 
 
-def logloss(df: pd.DataFrame) -> float:
-    """1着馬の正規化確率の −log の平均（同着は 1/k ずつ）。勝ち馬のいないレースは除く。"""
+def logloss_by_race(df: pd.DataFrame) -> pd.Series:
+    """レースごとの logloss（1着馬の正規化確率の −log。同着は 1/k ずつ）。勝ち馬のいないレースは除く。"""
     norm = _races_with_winner(df)
-    per_race = (-norm["y"] * np.log(np.clip(norm["p"], EPS, 1.0))).groupby(norm["race_id"]).sum()
-    return float(per_race.mean())
+    return (-norm["y"] * np.log(np.clip(norm["p"], EPS, 1.0))).groupby(norm["race_id"]).sum()
+
+
+def brier_by_race(df: pd.DataFrame) -> pd.Series:
+    """レースごとの Brier（レース内の全馬の (p − y)² の和）。"""
+    norm = _races_with_winner(df)
+    return ((norm["p"] - norm["y"]) ** 2).groupby(norm["race_id"]).sum()
+
+
+def logloss(df: pd.DataFrame) -> float:
+    """logloss のレース平均。"""
+    return float(logloss_by_race(df).mean())
 
 
 def brier(df: pd.DataFrame) -> float:
-    """レース内の全馬の (p − y)² の和の、レース平均。"""
-    norm = _races_with_winner(df)
-    per_race = ((norm["p"] - norm["y"]) ** 2).groupby(norm["race_id"]).sum()
-    return float(per_race.mean())
+    """Brier のレース平均。"""
+    return float(brier_by_race(df).mean())
 
 
-def _payouts_top(df: pd.DataFrame) -> pd.DataFrame:
+def paired_diff(
+    a: pd.Series, b: pd.Series, n_boot: int = 2000, seed: int = 0, alpha: float = 0.05,
+) -> dict:
+    """レースごとの指標 a − b の平均と95%区間（同じレースの組を復元抽出する、対応ありのブートストラップ）。"""
+    diff = (a - b.reindex(a.index)).dropna().to_numpy()
+    if len(diff) == 0:
+        return {"diff": float("nan"), "ci_low": float("nan"), "ci_high": float("nan"), "races": 0}
+    rng = np.random.default_rng(seed)
+    means = diff[rng.integers(0, len(diff), size=(n_boot, len(diff)))].mean(axis=1)
+    low, high = np.quantile(means, [alpha / 2, 1 - alpha / 2])
+    return {"diff": float(diff.mean()), "ci_low": float(low), "ci_high": float(high),
+            "races": int(len(diff))}
+
+
+def _payouts_top(df: pd.DataFrame, tiebreak: str | None = None) -> pd.DataFrame:
     """レースごとの (賭け金, 払戻)。予測1位の単勝を100円。"""
-    top = top_picks(df)
+    top = top_picks(df, tiebreak)
     pay = np.where(top["finish"] == 1, top["odds"].fillna(0) * 100, 0.0)
     return pd.DataFrame({"race_id": top["race_id"].to_numpy(), "stake": 100.0, "payout": pay})
 
@@ -169,9 +196,11 @@ def bootstrap_roi(
     return float(low), float(high)
 
 
-def roi_top(df: pd.DataFrame, n_boot: int = 2000, seed: int = 0) -> dict:
+def roi_top(
+    df: pd.DataFrame, n_boot: int = 2000, seed: int = 0, tiebreak: str | None = None,
+) -> dict:
     """予測1位の単勝を毎回100円買ったときの回収率と95%区間。"""
-    per_race = _payouts_top(df)
+    per_race = _payouts_top(df, tiebreak)
     low, high = bootstrap_roi(per_race, n_boot, seed)
     return {"roi": _roi(per_race), "ci_low": low, "ci_high": high, "bets": int(len(per_race))}
 
@@ -197,13 +226,14 @@ def calibration_table(df: pd.DataFrame, bins=DEFAULT_BINS) -> pd.DataFrame:
 
 def summary(
     df: pd.DataFrame, ev_thresholds=(1.0, 1.2), n_boot: int = 2000, seed: int = 0,
+    tiebreak: str | None = None,
 ) -> dict:
     """主な指標をまとめて1つの dict にする（表に並べる用）。"""
-    top = roi_top(df, n_boot, seed)
+    top = roi_top(df, n_boot, seed, tiebreak)
     out = {
         "races": int(df["race_id"].nunique()),
-        "hit_rate": hit_rate(df),
-        "place_rate": place_rate(df),
+        "hit_rate": hit_rate(df, tiebreak),
+        "place_rate": place_rate(df, tiebreak),
         "logloss": logloss(df),
         "brier": brier(df),
         "roi_top": top["roi"], "roi_top_ci": (top["ci_low"], top["ci_high"]),
@@ -250,7 +280,7 @@ def rank_correlation(df: pd.DataFrame, score_col: str) -> dict:
     ])
     nan = float("nan")
     return {
-        "per_race": float(np.nanmean(per_race)) if len(groups) else nan,
+        "per_race": float(np.nanmean(per_race)) if np.isfinite(per_race).any() else nan,
         "per_race_all": float(np.nan_to_num(per_race).mean()) if len(groups) else nan,
         "per_race_legacy": float(np.nan_to_num(legacy).mean()) if len(groups) else nan,
         "pooled": _spearman(-valid[score_col].to_numpy(), valid["finish"].to_numpy()),
