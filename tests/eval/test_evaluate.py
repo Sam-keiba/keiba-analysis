@@ -110,3 +110,13 @@ def test_walk_forward_runs_fit_predict(df):
 def test_rank_correlation_sign():
     perfect = pd.DataFrame({"race_id": ["R"] * 3, "score": [3.0, 2.0, 1.0], "finish": [1, 2, 3]})
     assert evaluate.rank_correlation(perfect, "score")["per_race"] == pytest.approx(1.0)
+
+
+def test_rank_correlation_counts_undecidable_races():
+    # R2 は全頭同じスコア（新馬戦のように見分けられない）
+    two = pd.DataFrame({"race_id": ["R1"] * 3 + ["R2"] * 3,
+                        "score": [3.0, 2.0, 1.0, 0.0, 0.0, 0.0], "finish": [1, 2, 3, 3, 2, 1]})
+    corr = evaluate.rank_correlation(two, "score")
+    assert corr["per_race"] == pytest.approx(1.0)          # R2 を除く
+    assert corr["per_race_all"] == pytest.approx(0.5)      # R2 を0で数える
+    assert corr["per_race_legacy"] == pytest.approx(0.0)   # R2 は馬番順＝着順の逆で −1

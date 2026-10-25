@@ -218,10 +218,13 @@ def summary(
 
 # --- 順位相関 ---------------------------------------------------------------------
 
-def _spearman(a: np.ndarray, b: np.ndarray) -> float:
-    """スピアマンの順位相関（同順位は平均順位）。ばらつきが無ければ NaN。"""
-    ra = pd.Series(a).rank(method="average").to_numpy()
-    rb = pd.Series(b).rank(method="average").to_numpy()
+def _spearman(a: np.ndarray, b: np.ndarray, method: str = "average") -> float:
+    """スピアマンの順位相関。同順位は既定で平均順位（`method="first"` なら並び順で切る）。
+
+    ばらつきが無ければ NaN。
+    """
+    ra = pd.Series(a).rank(method=method).to_numpy()
+    rb = pd.Series(b).rank(method=method).to_numpy()
     if ra.std() == 0 or rb.std() == 0:
         return float("nan")
     return float(np.corrcoef(ra, rb)[0, 1])
@@ -230,15 +233,25 @@ def _spearman(a: np.ndarray, b: np.ndarray) -> float:
 def rank_correlation(df: pd.DataFrame, score_col: str) -> dict:
     """スコアの順と着順の順位相関。スコアが高いほど着順が良い（小さい）とき正になる。
 
-    `per_race` はレースごとの相関の平均、`pooled` は全頭をまとめた1本。
+    - `per_race` … レースごとの相関の平均。全頭のスコアが同じレース（新馬戦など）は
+      相関が出ないので除く
+    - `per_race_all` … 同じく、ただし相関が出ないレースを0（見分けられない）として数える
+    - `per_race_legacy` … 旧実測（0.390）の出し方。同点を並び順（馬番順）で切り、全レースを数える
+    - `pooled` … 全頭をまとめた1本
     着順の無い馬（中止など）は除く。
     """
     valid = df.dropna(subset=["finish", score_col])
-    per_race = [
-        _spearman(-group[score_col].to_numpy(), group["finish"].to_numpy())
-        for _, group in valid.groupby("race_id") if len(group) >= 2
-    ]
+    groups = [g for _, g in valid.groupby("race_id") if len(g) >= 2]
+    per_race = np.array([
+        _spearman(-g[score_col].to_numpy(), g["finish"].to_numpy()) for g in groups
+    ])
+    legacy = np.array([
+        _spearman(-g[score_col].to_numpy(), g["finish"].to_numpy(), method="first") for g in groups
+    ])
+    nan = float("nan")
     return {
-        "per_race": float(np.nanmean(per_race)) if per_race else float("nan"),
+        "per_race": float(np.nanmean(per_race)) if len(groups) else nan,
+        "per_race_all": float(np.nan_to_num(per_race).mean()) if len(groups) else nan,
+        "per_race_legacy": float(np.nan_to_num(legacy).mean()) if len(groups) else nan,
         "pooled": _spearman(-valid[score_col].to_numpy(), valid["finish"].to_numpy()),
     }
