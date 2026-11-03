@@ -18,3 +18,8 @@ def test_render_coverage_takes_the_scope():
     coverage = Coverage(sire_horses=3, sire_runs=7, known=10, total=10)
     assert "（2023年以降のJRA）" in sv.render_coverage(coverage, sv.local_scope("2023-01-01"))
     assert "（1995年以降のJRA）" in sv.render_coverage(coverage)
+
+
+def test_table_notes_show_bold_instead_of_asterisks_and_stay_escaped():
+    html = sv.render_aei_table([("項目", "1.00", "**太字**と<script>")])
+    assert "<b>太字</b>" in html and "**" not in html and "<script>" not in html

@@ -592,8 +592,9 @@ def local_field(key: str, everyone: dict[str, dict]) -> float | None:
     merged: dict[str, int] = {}
     for stats in everyone.values():
         for column, value in stats.items():
-            if isinstance(value, (int, float)):
-                merged[column] = merged.get(column, 0) + value
+            # 値が無い（NULL）列も0として持つ。全馬で無い列があっても、その項目は「出せない」で済む
+            if value is None or isinstance(value, (int, float)):
+                merged[column] = merged.get(column, 0) + (value or 0)
     return local_metric(key, merged)
 
 

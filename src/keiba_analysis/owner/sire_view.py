@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+import re
 from html import escape
 
 from keiba_data.sire_data import GRADES, Metric
@@ -57,6 +58,11 @@ MISSING_TRENDS: tuple[tuple[str, str], ...] = (
     ("平均募集価格（クラブ馬）", "一口クラブの募集価格はどの公開サイトにも載っていない"),
     ("クラブ馬回収率", "同上（募集価格が分からないと回収率が出せない）"),
 )
+
+
+def _note_html(text: str) -> str:
+    """説明文のHTML。エスケープしたうえで `**太字**` だけを生かす。"""
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escape(text))
 
 
 def format_value(metric: Metric, value: float | None) -> str:
@@ -108,7 +114,7 @@ def _gauge(metric: Metric) -> str:
   <div class="sg-ends">
     <span>{escape(metric.low_label)}</span><span>{escape(metric.high_label)}</span>
   </div>
-  <div class="sg-note">{escape(metric.description)}</div>
+  <div class="sg-note">{_note_html(metric.description)}</div>
 </div>"""
 
 
@@ -140,7 +146,7 @@ def render_aei_table(rows: list[tuple[str, str, str]]) -> str:
     body = "".join(
         f'<tr class="{"sa-missing" if value == DASH else ""}">'
         f'<th>{escape(label)}</th><td class="sa-value">{escape(value)}</td>'
-        f'<td class="sa-desc">{escape(note)}</td></tr>'
+        f'<td class="sa-desc">{_note_html(note)}</td></tr>'
         for label, value, note in rows
     )
     return f'<table class="sire-aei"><tbody>{body}</tbody></table>'
@@ -264,7 +270,7 @@ def render_radar_basis(axes: list[RadarAxis]) -> str:
             f'<td class="sa-value">{escape(format_value(metric, metric.value))}</td>'
             f'<td class="sa-value">{escape(format_value(metric, metric.field_value))}</td>'
             f'<td class="sa-value"><b>{metric.grade}</b> / {GRADES}</td>'
-            f'<td class="sa-desc">{escape(metric.description)}</td></tr>'
+            f'<td class="sa-desc">{_note_html(metric.description)}</td></tr>'
         )
     head = (
         "<tr><th>軸</th><th>測っているもの</th><th>集計範囲</th><th>この種牡馬</th>"
@@ -466,7 +472,7 @@ def render_local_table(metrics: list[Metric]) -> str:
             f'<td class="sa-value">{escape(value)}</td>'
             f'<td class="sa-value">{escape(field)}</td>'
             f'<td class="sa-value">{grade}</td>'
-            f'<td class="sa-desc">{escape(metric.description)}</td></tr>'
+            f'<td class="sa-desc">{_note_html(metric.description)}</td></tr>'
         )
     head = ("<tr><th>項目</th><th>この種牡馬</th><th>全産駒平均</th>"
             "<th>段階</th><th>説明</th></tr>")

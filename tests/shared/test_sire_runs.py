@@ -342,3 +342,8 @@ def test_by_broodmare_sire_merges_spellings_by_key(seeded):
     tallies = {t.label: t for t in sr.by_broodmare_sire(sr.sire_runs(seeded, SIRE))}
     assert set(tallies) == {"キングカメハメハ", "クロフネ"}     # カナ2頭・英字1頭なのでカナ
     assert tallies["キングカメハメハ"].horses == 3
+
+
+def test_local_field_treats_columns_empty_for_everyone_as_unavailable():
+    everyone = {"A": {"debut_weight": None, "debut_weight_n": None}}
+    assert sr.local_field("debut_weight", everyone) is None
